@@ -389,6 +389,23 @@ class LetterStatusCountsOut(Schema):
     overdue: int = 0
 
 
+class ArchiveListIn(InputSchema):
+    """`listArchive`: the archive's filters, every one optional; together they all apply. In
+    a body, so a sender's name is never in a URL (security review of PR #54, point 1)."""
+
+    kind: str = ""
+    document_type: str = ""
+    year: int = Field(default=0, ge=0, le=2200)
+    # Exactly this sender, a value of `getArchiveFacets`.
+    sender: str = Field(default="", max_length=200)
+    person_id: UUID | None = None
+    label_id: UUID | None = None
+    letter_status: str = ""
+    overdue: bool = False
+    automatic: bool = False
+    expiring: bool = False
+
+
 class FacetOut(Schema):
     """One value a filter can choose and how many reviewed documents the caller sees with
     it."""

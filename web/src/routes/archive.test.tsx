@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   API,
   belasting,
+  bodyFilters,
   documentHandlers,
   documentSummary,
   HttpResponse,
@@ -31,7 +32,7 @@ describe("archive", () => {
   it("names an unknown sender", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...documentSummary, sender: "" }]),
       ),
     );
@@ -42,7 +43,7 @@ describe("archive", () => {
   it("shows the AI's proposed sender, type and date as a proposal, not as fact", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([
           {
             ...documentSummary,
@@ -97,7 +98,7 @@ describe("archive", () => {
   it("shows the addressees in a column", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...documentSummary, addressee_ids: [papa.id] }]),
       ),
       ...documentHandlers(),
@@ -114,8 +115,8 @@ describe("archive", () => {
     const seen: (string | null)[] = [];
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
-        seen.push(new URL(request.url).searchParams.get("person_id"));
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, async ({ request }) => {
+        seen.push((await bodyFilters(request)).get("person_id"));
         return HttpResponse.json([documentSummary]);
       }),
       ...documentHandlers(),
@@ -139,7 +140,7 @@ describe("archive", () => {
   it("shows the labels of a letter as chips in a column", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...documentSummary, label_ids: [belasting.id] }]),
       ),
       ...documentHandlers(),
@@ -157,8 +158,8 @@ describe("archive", () => {
     const seen: (string | null)[] = [];
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
-        seen.push(new URL(request.url).searchParams.get("label_id"));
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, async ({ request }) => {
+        seen.push((await bodyFilters(request)).get("label_id"));
         return HttpResponse.json([documentSummary]);
       }),
       ...documentHandlers(),
@@ -226,7 +227,9 @@ describe("archive", () => {
   it("says nothing was found with these filters, and not that the archive is empty", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
+        HttpResponse.json([]),
+      ),
       ...documentHandlers(),
     );
     renderApp(`/w/${workspace.id}/archief?label=${belasting.id}`);
@@ -237,7 +240,9 @@ describe("archive", () => {
   it("says the archive is empty when nothing is filtered, and how letters get there", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
+        HttpResponse.json([]),
+      ),
       ...documentHandlers(),
     );
     renderApp(`/w/${workspace.id}/archief`);
@@ -251,7 +256,7 @@ describe("archive", () => {
   it("shows the badge only on a letter the AI had a hand in", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([
           { ...documentSummary, confirmed_by_ai: true },
           { ...documentSummary, id: "2", sender: "Gemeente", auto_label_ids: [belasting.id] },
@@ -283,8 +288,8 @@ describe("archive", () => {
     const seen: (string | null)[] = [];
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
-        seen.push(new URL(request.url).searchParams.get("automatic"));
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, async ({ request }) => {
+        seen.push((await bodyFilters(request)).get("automatic"));
         return HttpResponse.json([documentSummary]);
       }),
       ...documentHandlers(),
@@ -315,8 +320,8 @@ describe("archive: letter status", () => {
       http.get(`*${API}/workspaces/${workspace.id}/documents/status-counts`, () =>
         HttpResponse.json(counts),
       ),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
-        asked.push(new URL(request.url).searchParams);
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, async ({ request }) => {
+        asked.push(await bodyFilters(request));
         return HttpResponse.json([
           { ...documentSummary, letter_status: "waiting", waiting_until: "2026-12-03" },
           {
@@ -417,8 +422,8 @@ describe("archive: own documents and its filters", () => {
           senders: [{ value: "Belastingdienst", count: 40 }],
         }),
       ),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
-        asked.push(new URL(request.url).searchParams);
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, async ({ request }) => {
+        asked.push(await bodyFilters(request));
         return HttpResponse.json([documentSummary, ownDocument]);
       }),
       ...documentHandlers(),
@@ -435,7 +440,8 @@ describe("archive: own documents and its filters", () => {
     expect(within(row).getByText("Identiteitsbewijs")).toBeInTheDocument();
     expect(within(row).getByText("Geldig tot 12 mrt 2031")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Belastingdienst" })).toBeInTheDocument();
-    expect(asked.at(-1)?.get("archived")).toBe("true");
+    // Archief's own POST: reviewed documents only, nothing of the filters in a URL.
+    expect(asked.length).toBeGreaterThan(0);
     expect(screen.getByRole("columnheader", { name: "Afzender of titel" })).toBeInTheDocument();
     expect(await screen.findByText("1.252 documenten")).toBeInTheDocument();
   });
@@ -443,7 +449,7 @@ describe("archive: own documents and its filters", () => {
   it("an expired document is marked in words", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...ownDocument, expires_on: "2020-01-31" }]),
       ),
       ...documentHandlers(),
@@ -494,7 +500,7 @@ describe("archive: own documents and its filters", () => {
     expect([last?.get("document_type"), last?.get("year")]).toEqual(["identity", "2025"]);
   });
 
-  it("chooses a sender from the list, never as typed text", async () => {
+  it("chooses a sender from the list; the name goes in the POST body, never in the URL", async () => {
     const asked: URLSearchParams[] = [];
     server.use(...archiveHandlers(asked));
     const user = userEvent.setup();
@@ -502,10 +508,19 @@ describe("archive: own documents and its filters", () => {
     const sender = await screen.findByRole("combobox", { name: "Afzender" });
     await screen.findByRole("option", { name: "Belastingdienst (40)" });
     await user.selectOptions(sender, "Belastingdienst");
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ afzender: "Belastingdienst" }),
-    );
     await waitFor(() => expect(asked.at(-1)?.get("sender")).toBe("Belastingdienst"));
+    expect(sender).toHaveValue("Belastingdienst");
+    expect(router.state.location.search).toEqual({});
+    expect(router.state.location.href).not.toContain("Belastingdienst");
+  });
+
+  it("an afzender in an old URL is ignored, not sent", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...archiveHandlers(asked));
+    renderApp(`/w/${workspace.id}/archief?afzender=Belastingdienst`);
+    await screen.findByRole("link", { name: "Paspoort" });
+    expect(asked.at(-1)?.get("sender")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Afzender" })).toHaveValue("");
   });
 
   it("/post goes to /archief keeping persoon and label", async () => {

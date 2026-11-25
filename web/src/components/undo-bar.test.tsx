@@ -66,7 +66,9 @@ describe("undo bar", () => {
       twoWorkspaces(),
       ...loggedInHandlers(),
       ...documentHandlers(),
-      http.get(`*${API}/workspaces/${secondWorkspace.id}/documents`, () => HttpResponse.json([])),
+      http.post(`*${API}/workspaces/${secondWorkspace.id}/documents/archive`, () =>
+        HttpResponse.json([]),
+      ),
       http.get(`*${API}/workspaces/${secondWorkspace.id}/inbox/counts`, () =>
         HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
       ),

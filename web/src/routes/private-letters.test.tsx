@@ -56,7 +56,7 @@ function event(kind: string, extra: Partial<Event> = {}): Event {
 describe("the lock", () => {
   it("a private letter in the post list shows Privé", async () => {
     server.use(
-      http.get(`${base}/documents`, () =>
+      http.post(`${base}/documents/archive`, () =>
         HttpResponse.json([
           { ...documentSummary, visibility: "restricted", reader_names: ["Anne", "Bob"] },
         ]),

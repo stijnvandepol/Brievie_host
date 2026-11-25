@@ -1,10 +1,11 @@
 import { plural, t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { ToggleButton, ToggleButtonGroup } from "react-aria-components";
 import {
   archiveFacetsQuery,
-  documentsQuery,
+  archiveQuery,
   labelsQuery,
   letterStatusCountsQuery,
   personsQuery,
@@ -36,7 +37,6 @@ export type ArchiveSearch = {
   soort?: KindFilter;
   type?: string;
   persoon?: string;
-  afzender?: string;
   jaar?: number;
   label?: string;
   status?: ArchiveStatus;
@@ -49,7 +49,10 @@ function ArchivePage() {
   usePageTitle(t`Archief`);
   const { workspace } = archiveRoute.useRouteContext();
   const search = archiveRoute.useSearch();
-  const { soort, type, persoon, afzender, jaar, label, status, telaat, automatisch } = search;
+  const { soort, type, persoon, jaar, label, status, telaat, automatisch } = search;
+  // A sender's name is content: chosen here and kept in memory, never in the URL (security
+  // review of PR #54, point 1); it goes to the server in a POST body.
+  const [afzender, setAfzender] = useState<string | undefined>(undefined);
   const expiring = search["loopt-af"];
   const navigate = useNavigate();
   const persons = useQuery(personsQuery(workspace.id));
@@ -60,8 +63,7 @@ function ArchivePage() {
     soort || type || persoon || afzender || jaar || label || status || telaat || automatisch,
   );
   const { data, error, isPending } = useQuery(
-    documentsQuery(workspace.id, {
-      archived: true,
+    archiveQuery(workspace.id, {
       kind: soort ? KINDS[soort] : undefined,
       document_type: type,
       person_id: persoon,
@@ -223,7 +225,7 @@ function ArchivePage() {
           <select
             id="filter-sender"
             value={afzender ?? ""}
-            onChange={(event) => go({ afzender: event.target.value || undefined })}
+            onChange={(event) => setAfzender(event.target.value || undefined)}
           >
             <option value="">{t`Alle afzenders`}</option>
             {senderOptions.map((option) => (
@@ -335,7 +337,6 @@ export function validateArchiveSearch(search: Record<string, unknown>): ArchiveS
     soort: kind === "brieven" || kind === "documenten" ? kind : undefined,
     type: text(search.type),
     persoon: text(search.persoon),
-    afzender: text(search.afzender),
     jaar: Number.isInteger(year) && year >= 1900 && year <= 2200 ? year : undefined,
     label: text(search.label),
     status: ARCHIVE_STATUSES.find((entry) => entry.url === status)?.url,

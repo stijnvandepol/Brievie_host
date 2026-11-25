@@ -147,7 +147,11 @@ describe("unread elsewhere", () => {
   });
 
   it("Archief shows no unread marks: those are for Mijn post", async () => {
-    server.use(myPost([]), ...loggedInHandlers(), ...documentHandlers());
+    server.use(
+      http.post(`${base}/documents/archive`, () => HttpResponse.json([unreadLetter, readLetter])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
     renderApp(`/w/${workspace.id}/archief`);
     await screen.findByRole("link", { name: "Gemeente" });
     expect(rowOf("Gemeente")).not.toHaveClass("unread");

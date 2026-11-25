@@ -169,7 +169,6 @@ def test_exported_query_parameters_have_no_anyof() -> None:
         "kind",
         "document_type",
         "year",
-        "sender",
         "archived",
         "expiring",
     }

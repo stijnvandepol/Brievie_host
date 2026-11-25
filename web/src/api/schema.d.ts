@@ -965,7 +965,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. 422 `validation_error` for an unknown kind, type or year.
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. A sender is never a query parameter (it would land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an unknown kind, type or year.
          */
         get: operations["listDocuments"];
         put?: never;
@@ -974,6 +974,26 @@ export interface paths {
          * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Archive
+         * @description Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, filtered by the body: as `listDocuments` with `archived=true`, plus `sender` (exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a URL, a log line or the browser's history. Reads only; 422 `validation_error` for an unknown kind, type, year or status.
+         */
+        post: operations["listArchive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2736,6 +2756,63 @@ export interface components {
             types?: components["schemas"]["FacetOut"][];
             /** Years */
             years?: components["schemas"]["FacetOut"][];
+        };
+        /**
+         * ArchiveListIn
+         * @description `listArchive`: the archive's filters, every one optional; together they all apply. In
+         *     a body, so a sender's name is never in a URL (security review of PR #54, point 1).
+         */
+        ArchiveListIn: {
+            /**
+             * Automatic
+             * @default false
+             */
+            automatic: boolean;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expiring
+             * @default false
+             */
+            expiring: boolean;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Label Id
+             * Format: uuid
+             */
+            label_id?: string | null;
+            /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id?: string | null;
+            /**
+             * Sender
+             * @default
+             */
+            sender: string;
+            /**
+             * Year
+             * @default 0
+             */
+            year: number;
         };
         /** AssignIn */
         AssignIn: {
@@ -9194,7 +9271,6 @@ export interface operations {
                 kind?: string;
                 document_type?: string;
                 year?: number;
-                sender?: string;
                 archived?: boolean;
                 expiring?: boolean;
             };
@@ -9365,6 +9441,95 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveListIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummaryOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

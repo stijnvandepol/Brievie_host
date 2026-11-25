@@ -3241,3 +3241,16 @@ Rulings of the spec, kept as written:
   for a corpus whose dates follow the day it runs; nothing of the archive touches it. The
   one-off time of documents 0027 at 100,000 documents is not measured (the job migrates an
   empty database before it builds the world).
+
+### Security review of PR #54 (2026-11-25)
+
+Every point was checked against the code first.
+
+- **Point 1 (medium), held, fixed: a sender's name in a URL.** `listDocuments` took `sender` as a
+  query parameter and Archief put it in the address bar (`?afzender=`), so a name such as a
+  care provider or a bailiff reached proxy logs and the browser's history. The archive's list
+  is now `POST listArchive` (the filters in the body, the sender among them); `listDocuments`
+  has no `sender` any more (it was new in this PR, so nothing breaks). The web keeps the chosen
+  sender in the page's state, never in the URL; an old `?afzender=` is ignored. The other URL
+  filters name no content: a kind, a type of the closed list, a year, a status, ids of a person
+  and a label. A title is never a filter; search stays `POST searchDocuments`.

@@ -63,8 +63,6 @@ export type DocumentFilters = {
   document_type?: string;
   /** The document's own date's year, else its upload's. */
   year?: number;
-  /** Exactly this sender, a value of the archive's facets. */
-  sender?: string;
   /** Own documents ending within 90 days, or ended ("Loopt af"). */
   expiring?: boolean;
 };
@@ -99,7 +97,6 @@ export const documentsQuery = (
             kind: filters.kind || undefined,
             document_type: filters.document_type || undefined,
             year: filters.year || undefined,
-            sender: filters.sender || undefined,
             expiring: filters.expiring || undefined,
           },
         },
@@ -308,6 +305,51 @@ export const letterStatusCountsQuery = (workspaceId: string, personId?: string) 
           params: {
             path: { workspace_id: workspaceId },
             query: { person_id: personId || undefined },
+          },
+        },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+export type ArchiveFilters = {
+  kind?: string;
+  document_type?: string;
+  year?: number;
+  /** Exactly this sender, a value of the archive's facets: only ever in a POST body. */
+  sender?: string;
+  person_id?: string;
+  label_id?: string;
+  letter_status?: string;
+  overdue?: boolean;
+  automatic?: boolean;
+  expiring?: boolean;
+};
+
+/**
+ * Archief's list, as a POST (security review of PR #54, point 1): a sender's name never
+ * goes into a URL. The filters live in memory (this cache), never in the address bar.
+ */
+export const archiveQuery = (workspaceId: string, filters: ArchiveFilters = {}) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "archive", filters],
+    queryFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/documents/archive",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            kind: filters.kind ?? "",
+            document_type: filters.document_type ?? "",
+            year: filters.year ?? 0,
+            sender: filters.sender ?? "",
+            person_id: filters.person_id || null,
+            label_id: filters.label_id || null,
+            letter_status: filters.letter_status ?? "",
+            overdue: filters.overdue ?? false,
+            automatic: filters.automatic ?? false,
+            expiring: filters.expiring ?? false,
           },
         },
       );

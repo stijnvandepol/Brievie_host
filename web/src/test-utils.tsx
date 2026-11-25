@@ -160,6 +160,18 @@ export const secondWorkspace = {
   role: "member",
 };
 
+/** The filters of a `listArchive` body as search params: what a test asserts on. Empty,
+ * false, zero and null values are left out (as an unset filter). */
+export async function bodyFilters(request: Request): Promise<URLSearchParams> {
+  const body = (await request.json()) as Record<string, unknown>;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body)) {
+    if (value === null || value === "" || value === false || value === 0) continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
 /** What `getArchiveFacets` answers for the one letter of `documentSummary`. */
 export const archiveFacets: components["schemas"]["ArchiveFacetsOut"] = {
   kinds: [{ value: "letter", count: 1 }],
@@ -378,6 +390,10 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/archive-facets`, () =>
       HttpResponse.json(archiveFacets),
+    ),
+    // Archief's list is a POST (a sender never goes into a URL).
+    http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
+      HttpResponse.json([documentSummary]),
     ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
       HttpResponse.json([]),

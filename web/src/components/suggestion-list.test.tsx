@@ -127,7 +127,7 @@ describe("suggestion list", () => {
 
   it("marks a letter with open suggestions in the post list", async () => {
     server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...documentSummary, open_suggestion_count: 2 }]),
       ),
       ...loggedInHandlers(),

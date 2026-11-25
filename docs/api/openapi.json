@@ -382,6 +382,72 @@
         "title": "ArchiveFacetsOut",
         "type": "object"
       },
+      "ArchiveListIn": {
+        "description": "`listArchive`: the archive's filters, every one optional; together they all apply. In\na body, so a sender's name is never in a URL (security review of PR #54, point 1).",
+        "properties": {
+          "automatic": {
+            "default": false,
+            "title": "Automatic",
+            "type": "boolean"
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expiring": {
+            "default": false,
+            "title": "Expiring",
+            "type": "boolean"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_id": {
+            "format": "uuid",
+            "title": "Label Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "person_id": {
+            "format": "uuid",
+            "title": "Person Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Sender",
+            "type": "string"
+          },
+          "year": {
+            "default": 0,
+            "maximum": 2200,
+            "minimum": 0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "ArchiveListIn",
+        "type": "object"
+      },
       "AssignIn": {
         "properties": {
           "user_id": {
@@ -10395,7 +10461,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. 422 `validation_error` for an unknown kind, type or year.",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. A sender is never a query parameter (it would land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an unknown kind, type or year.",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -10532,16 +10598,6 @@
               "default": 0,
               "title": "Year",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sender",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "Sender",
-              "type": "string"
             }
           },
           {
@@ -10799,6 +10855,132 @@
           }
         ],
         "summary": "Create Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/archive": {
+      "post": {
+        "description": "Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, filtered by the body: as `listDocuments` with `archived=true`, plus `sender` (exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a URL, a log line or the browser's history. Reads only; 422 `validation_error` for an unknown kind, type, year or status.",
+        "operationId": "listArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveListIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummaryOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Archive",
         "tags": [
           "documents"
         ]

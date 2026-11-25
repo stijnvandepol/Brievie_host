@@ -28,6 +28,7 @@ from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ArchiveFacetsOut,
+    ArchiveListIn,
     ConfirmIn,
     DocumentAccessOut,
     DocumentDetailsIn,
@@ -160,9 +161,10 @@ def create_document(
         'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. '
         "Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of "
         "both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's "
-        "own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and "
-        "`expiring=true` (own documents ending within 90 days or already ended) narrow it. "
-        "422 `validation_error` for an unknown kind, type or year."
+        "own date, else its upload's) and `expiring=true` (own documents ending within 90 "
+        "days or already ended) narrow it. A sender is never a query parameter (it would "
+        "land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an "
+        "unknown kind, type or year."
     ),
 )
 def list_documents(
@@ -180,7 +182,6 @@ def list_documents(
     kind: str = "",
     document_type: str = "",
     year: int = 0,
-    sender: str = "",
     archived: bool = False,
     expiring: bool = False,
 ) -> list[DocumentSummaryOut]:
@@ -200,9 +201,43 @@ def list_documents(
             kind=kind,
             document_type=document_type,
             year=year,
-            sender=sender,
             archived=archived,
             expiring=expiring,
+        ),
+    )
+    return services.document_summaries_out(membership, documents)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/archive",
+    response={200: list[DocumentSummaryOut], 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    operation_id="listArchive",
+    description=(
+        "Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, "
+        "filtered by the body: as `listDocuments` with `archived=true`, plus `sender` "
+        "(exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a "
+        "URL, a log line or the browser's history. Reads only; 422 `validation_error` for "
+        "an unknown kind, type, year or status."
+    ),
+)
+def list_archive(
+    request: HttpRequest, workspace_id: UUID, payload: ArchiveListIn
+) -> list[DocumentSummaryOut]:
+    membership = workspace_member(request, workspace_id)
+    documents = services.list_documents(
+        membership,
+        person_id=payload.person_id,
+        label_id=payload.label_id,
+        automatic=payload.automatic,
+        letter_status=payload.letter_status,
+        overdue=payload.overdue,
+        archive=services.ArchiveFilters(
+            kind=payload.kind,
+            document_type=payload.document_type,
+            year=payload.year,
+            sender=payload.sender,
+            archived=True,
+            expiring=payload.expiring,
         ),
     )
     return services.document_summaries_out(membership, documents)

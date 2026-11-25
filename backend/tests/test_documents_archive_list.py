@@ -126,3 +126,28 @@ def test_the_api_takes_the_filters_and_answers_the_new_fields(client: Client) ->
         "",
     )
     assert client.get(url, {"kind": "folder"}).status_code == 422
+
+
+def test_a_sender_is_never_a_query_parameter_but_a_body_field(client: Client) -> None:
+    """Security review of PR #54, point 1: a sender's name ("GGZ …", "Deurwaarder …") would
+    end up in proxy logs and the browser history. It is chosen in the body of
+    `POST listArchive`; `GET listDocuments` has no `sender`."""
+    h = household()
+    water = letter(h.workspace, on=[h.persons["Anne"]])
+    _set(water, sender="Waterbedrijf")
+    other = letter(h.workspace, on=[h.persons["Anne"]])
+    _set(other, sender="Gemeente")
+    client.force_login(h.anne)
+    url = f"/api/v1/workspaces/{h.workspace.id}/documents"
+    listed = client.get(url, {"archived": "true", "sender": "Waterbedrijf"})
+    assert {row["id"] for row in listed.json()} == {str(water.id), str(other.id)}
+    response = client.post(
+        f"{url}/archive",
+        {"sender": "Waterbedrijf", "kind": "letter"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200, response.json()
+    assert [row["id"] for row in response.json()] == [str(water.id)]
+    assert client.post(f"{url}/archive", {}, content_type="application/json").status_code == 200
+    bad = client.post(f"{url}/archive", {"kind": "folder"}, content_type="application/json")
+    assert bad.status_code == 422
