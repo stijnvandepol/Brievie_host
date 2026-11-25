@@ -28,6 +28,7 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/documents/intake.py",
     # Intake: the pipeline's first step reads and writes the uploaded file's pages.
     "apps/intake/prepare.py",
+    "apps/intake/services.py",
     # The purge of the trash reaches every trashed letter and its reader rows (it marks
     # what expired and deletes marked letters); the request paths of the trash never do.
     "apps/documents/purge.py",

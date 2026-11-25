@@ -57,7 +57,8 @@ def test_the_original_is_sealed_to_its_place(ws_a: Workspace) -> None:
 def test_fields_and_status(ws_a: Workspace) -> None:
     data = make_jpeg(60, 40)
     document, _created = _store(ws_a, data, name="C:\\fakepath\\foto.jpg")
-    document.refresh_from_db()
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        document.refresh_from_db()
     assert document.status == Document.Status.PROCESSING
     assert document.source == Document.Source.UPLOAD
     assert document.page_count == 0

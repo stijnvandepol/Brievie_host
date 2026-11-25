@@ -44,9 +44,10 @@ def prepare_document(
             return
         kind = FileKind(document.original_kind)
         expected = document.original_sha256
+        key = workspace_key(workspace_id)
     try:
         data = crypto.open_sealed(
-            workspace_key(workspace_id),
+            key,
             storage.read(original_path(workspace_id, document_id)),
             aad=original_aad(workspace_id, document_id),
         )

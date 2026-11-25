@@ -39,9 +39,10 @@ def _uploaded(ws: Workspace, data: bytes, kind: str = "pdf", **fields: object) -
             original_name=NAME,
             **fields,
         )
+        key = workspace_key(ws.id)
     default_storage().write(
         original_path(ws.id, document.id),
-        crypto.seal(workspace_key(ws.id), data, aad=original_aad(ws.id, document.id)),
+        crypto.seal(key, data, aad=original_aad(ws.id, document.id)),
     )
     return document
 
@@ -75,7 +76,8 @@ def test_an_uploaded_pdf_gets_its_pages_and_text(ws_a: Workspace) -> None:
     assert fresh.status == Document.Status.NEEDS_REVIEW
     assert fresh.page_count == 2
     assert [page.index for page in pages] == [1, 2]
-    key = workspace_key(ws_a.id)
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        key = workspace_key(ws_a.id)
     for page in pages:
         sealed = default_storage().read(page.storage_path)
         plain = crypto.open_sealed(key, sealed, aad=page_aad(ws_a.id, document.id, page.index))
