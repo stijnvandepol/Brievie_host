@@ -42,6 +42,9 @@ def test_facets_count_kinds_types_years_and_senders() -> None:
     facets = _facets(h.workspace, h.anne)
     assert _as_dict(facets.kinds) == {"letter": 1, "document": 2}
     assert _as_dict(facets.types) == {"invoice": 1, "identity": 1, "diploma": 1}
+    # By count, then by value; kinds in the order of `Document.Kind`.
+    assert [f.value for f in facets.types] == ["diploma", "identity", "invoice"]
+    assert [f.value for f in facets.kinds] == ["letter", "document"]
     assert [f.value for f in facets.years] == ["2025", "2024"]
     assert _as_dict(facets.years) == {"2025": 1, "2024": 2}
     assert _as_dict(facets.senders) == {"Waterbedrijf": 1}

@@ -342,6 +342,15 @@ def _ids(rng: random.Random, n: int) -> list[UUID]:
 _SENDERS: Final = [f"Afzender {n:03d}" for n in range(400)]
 _TYPES: Final = ["invoice", "assessment", "bill", "reminder", "policy", "information", "other"]
 _DOCUMENT_TYPES: Final = ["identity", "diploma", "warranty", "contract", "policy", "other"]
+# Words an own document's title is made of: things, never names.
+TITLE_WORDS: Final = [
+    f"{thing} {part}"
+    for thing in (
+        "Paspoort", "Rijbewijs", "Diploma", "Garantiebewijs", "Polis", "Contract",
+        "Huurcontract", "Zorgpas", "Loonstrook", "Aangifte", "Factuur", "Keuring",
+    )
+    for part in ("wasmachine", "auto", "woning", "fiets", "school")
+]  # fmt: skip
 
 
 class ArchiveRow(NamedTuple):
@@ -359,7 +368,7 @@ def archive_row(i: int, status: str) -> ArchiveRow:
         return ArchiveRow(
             kind="document",
             document_type=_DOCUMENT_TYPES[i // 4 % len(_DOCUMENT_TYPES)],
-            title=f"Document {i}",
+            title=f"{TITLE_WORDS[i // 4 % len(TITLE_WORDS)]} {i}",
             expires_in_days=(i % 400) - 100 if i % 16 == 15 else None,
         )
     return ArchiveRow("letter", _TYPES[i % len(_TYPES)], "", None)

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models.functions import Coalesce, ExtractYear
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -468,53 +468,49 @@ class ArchiveFacets:
 SENDERS_MAX = 50
 
 
+# One pass over the archive (measured, plan Task 12): the four groupings of the rows the
+# member sees, computed by PostgreSQL from one scan. GROUPING() says which set a row is of
+# (bit 3: kind, 2: type, 1: year, 0: sender; a set's own column is the one not rolled up).
+_FACETS_HEAD = (
+    "SELECT GROUPING(kind, document_type, year, sender), kind, document_type, year, sender,"
+    " count(*) FROM ("
+)
+_FACETS_TAIL = ") AS archive GROUP BY GROUPING SETS ((kind), (document_type), (year), (sender))"
+_SETS = {0b0111: "kind", 0b1011: "type", 0b1101: "year", 0b1110: "sender"}
+
+
 def list_archive_facets(membership: Membership) -> ArchiveFacets:
     """What the archive's filters can choose, counted over the reviewed documents the
-    member sees (`visible_documents`, `status = done`): kinds and types in one pass with
-    filtered counts, years and the 50 most frequent senders grouped. A value nobody sees
-    is never counted; a zero count is left out."""
-    archived = visibility.visible_documents(membership).filter(status=Document.Status.DONE)
-    counts = archived.aggregate(
-        **{
-            f"kind_{kind}": models.Count("id", filter=models.Q(kind=kind))
-            for kind in Document.Kind.values
-        },
-        **{
-            f"type_{kind}": models.Count("id", filter=models.Q(document_type=kind))
-            for kind in Document.Type.values
-        },
+    member sees (`visible_documents`, `status = done`): kinds, types, years and the 50 most
+    frequent senders, in one scan of those rows (grouping sets over the seam's own query,
+    run as the member under the policies). A value nobody sees is never counted; a zero
+    count is left out."""
+    archived = (
+        visibility.visible_documents(membership)
+        .filter(status=Document.Status.DONE)
+        .annotate(year=Coalesce(ExtractYear("letter_date"), ExtractYear("created_at")))
+        .values("kind", "document_type", "year", "sender")
     )
-    kinds = [
-        Facet(kind, int(counts[f"kind_{kind}"]))
-        for kind in Document.Kind.values
-        if counts[f"kind_{kind}"]
-    ]
-    types = sorted(
-        (
-            Facet(kind, int(counts[f"type_{kind}"]))
-            for kind in Document.Type.values
-            if counts[f"type_{kind}"]
-        ),
-        key=lambda facet: (-facet.count, facet.value),
+    inner, params = archived.query.sql_with_params()
+    found: dict[str, list[Facet]] = {"kind": [], "type": [], "year": [], "sender": []}
+    with connection.cursor() as cursor:
+        # The inner query is the ORM's own, with its parameters bound separately.
+        cursor.execute(_FACETS_HEAD + inner + _FACETS_TAIL, params)
+        for grouping, kind, document_type, year, sender, count in cursor.fetchall():
+            name = _SETS.get(int(grouping))
+            value = {"kind": kind, "type": document_type, "year": year, "sender": sender}.get(
+                name or ""
+            )
+            if name is None or value is None or value == "" or not count:
+                continue
+            found[name].append(Facet(str(value), int(count)))
+    by_count = lambda facet: (-facet.count, facet.value)  # noqa: E731
+    return ArchiveFacets(
+        kinds=[f for kind in Document.Kind.values for f in found["kind"] if f.value == kind],
+        types=sorted(found["type"], key=by_count),
+        years=sorted(found["year"], key=lambda facet: -int(facet.value)),
+        senders=sorted(found["sender"], key=by_count)[:SENDERS_MAX],
     )
-    years = [
-        Facet(str(row["year"]), int(row["count"]))
-        for row in archived.annotate(
-            year=Coalesce(ExtractYear("letter_date"), ExtractYear("created_at"))
-        )
-        .values("year")
-        .annotate(count=models.Count("id"))
-        .order_by("-year")
-        if row["year"] is not None
-    ]
-    senders = [
-        Facet(str(row["sender"]), int(row["count"]))
-        for row in archived.exclude(sender="")
-        .values("sender")
-        .annotate(count=models.Count("id"))
-        .order_by("-count", "sender")[:SENDERS_MAX]
-    ]
-    return ArchiveFacets(kinds=kinds, types=types, years=years, senders=senders)
 
 
 def inbox_counts(membership: Membership) -> dict[str, int]:
