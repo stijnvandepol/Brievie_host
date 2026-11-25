@@ -3103,7 +3103,9 @@ The `visibility-perf` gate (median <= 250 ms per list at 100,000 letters, S 4.9.
 failed at random on `list_tasks_all`, `menu_counts` and `list_persons` (253-261 ms on
 CI). The threshold and the gated lists stay; the lists got faster instead. Results and
 visibility are unchanged: every read still starts from `visible_documents` (or the task
-and people equivalents), and the seam and leak tests are unchanged and green.
+and people equivalents). The seam test lists the two new readers
+(`services._waiting_and_lingering`, `lingering.count_not_opened`); `test_menu_counts`
+checks the combined count against the separate ones; the leak tests are unchanged.
 
 - **Covering indexes for the letter policy** (`documents` 0025). A count over the visible
   letters, and the policy check of a task's letter, read a letter row only for the
