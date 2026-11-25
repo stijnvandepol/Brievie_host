@@ -2,6 +2,7 @@
 of PR #58, points 2 and 6): it gets no secret from the environment, answers in JSON only
 (never pickle), and a malformed, oversized, slow or greedy child is refused."""
 
+import base64
 import dataclasses
 import json
 import os
@@ -256,3 +257,50 @@ def test_an_unknown_error_code_from_the_child_is_not_passed_on() -> None:
         sandbox.count_from({"ok": False, "code": "<script>"})
 
     assert str(caught.value) == ""
+
+
+def _capture(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """Stand in for the child: record the command and answer limit, answer one page."""
+    seen: dict[str, object] = {}
+
+    def fake(command: list[str], data: bytes, *, timeout: float, answer_limit: int) -> object:
+        seen["command"], seen["answer_limit"] = command, answer_limit
+        return {"ok": True, "pages": [{"jpeg": "/9j/"}]}
+
+    monkeypatch.setattr(sandbox, "execute", fake)
+    return seen
+
+
+def test_the_answer_has_a_ceiling_whatever_the_page_setting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Re-review of PR #58, point 6: the limit was pages x 8 MiB, so a large
+    # BRIEVIE_MAX_PAGES let the child send (and the parent hold) gigabytes.
+    seen = _capture(monkeypatch)
+
+    sandbox.render(b"%PDF", kind="pdf", max_pages=10_000, timeout=1)
+
+    assert seen["answer_limit"] == sandbox.ANSWER_BYTES_MAX
+    command = seen["command"]
+    assert isinstance(command, list)
+    # The child's own RLIMIT_FSIZE (its answer argument) is the same number.
+    assert command[6] == str(sandbox.ANSWER_BYTES_MAX)
+
+
+def test_a_few_pages_keep_their_own_smaller_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _capture(monkeypatch)
+
+    sandbox.render(b"%PDF", kind="pdf", max_pages=3, timeout=1)
+
+    assert seen["answer_limit"] == 3 * sandbox.ANSWER_BYTES_PER_PAGE
+    assert sandbox.ANSWER_BYTES_MAX < 30 * sandbox.ANSWER_BYTES_PER_PAGE
+
+
+def test_a_page_over_its_own_limit_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sandbox, "ANSWER_BYTES_PER_PAGE", 64)
+    small = base64.b64encode(b"\xff\xd8" + b"x" * 40).decode()
+    large = base64.b64encode(b"\xff\xd8" + b"x" * 60).decode()
+
+    assert len(sandbox.pages_from({"ok": True, "pages": [{"jpeg": small}]}, max_pages=2)) == 1
+    with pytest.raises(IsolationError):
+        sandbox.pages_from({"ok": True, "pages": [{"jpeg": small}, {"jpeg": large}]}, max_pages=2)

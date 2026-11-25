@@ -38,8 +38,12 @@ from apps.intake.parsers import ParsedPage
 CHILD = Path(__file__).with_name("parsers.py")
 # PDFium rendering a 2500 px page needs well under this; a decompression bomb hits it.
 MEMORY_LIMIT = 1536 * 1024 * 1024
-# A 2500 px JPEG at quality 85 stays far below this, base64 included.
+# A 2500 px JPEG at quality 85 stays far below this, base64 included; a page over it is
+# refused.
 ANSWER_BYTES_PER_PAGE = 8 * 1024 * 1024
+# The whole answer, whatever BRIEVIE_MAX_PAGES says: the parent holds it in memory (read,
+# parsed, decoded). 30 letter pages of 1.6 MB each fit; a scan's whole upload is 32 MiB.
+ANSWER_BYTES_MAX = 64 * 1024 * 1024
 COUNT_ANSWER_BYTES = 4096
 # The codes a parser may report; anything else from the child is not passed on.
 KNOWN_CODES = frozenset({"file_unreadable", "file_encrypted", "too_many_pages", "image_too_large"})
@@ -143,7 +147,7 @@ def pages_from(answer: dict[str, object], *, max_pages: int) -> list[ParsedPage]
         if not isinstance(item, dict):
             raise IsolationError("")
         encoded = item.get("jpeg")
-        if not isinstance(encoded, str):
+        if not isinstance(encoded, str) or len(encoded) > ANSWER_BYTES_PER_PAGE:
             raise IsolationError("")
         try:
             jpeg = base64.b64decode(encoded, validate=True)
@@ -164,7 +168,8 @@ def count_pdf_pages(data: bytes, *, timeout: float) -> int:
 def render(data: bytes, *, kind: str, max_pages: int, timeout: float) -> list[ParsedPage]:
     """The pages of a PDF (`kind` "pdf") or a JPEG/PNG as JPEGs, rendered in the child."""
     pages = max_pages if kind == "pdf" else 1
-    limit = ANSWER_BYTES_PER_PAGE * pages
+    # The child's RLIMIT_FSIZE and the parent's read are the same number.
+    limit = min(ANSWER_BYTES_PER_PAGE * pages, ANSWER_BYTES_MAX)
     operation = "pdf" if kind == "pdf" else "image"
     command = _command(
         operation, _cpu_seconds(timeout), str(MEMORY_LIMIT), str(limit), str(max_pages)

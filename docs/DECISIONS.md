@@ -3592,3 +3592,11 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
    is checked, as the original is not needed to prove the master key (a page is opened
    for that). A back-up from before `documents.0033_original_file` has no originals and is
    not checked for them.
+6. **The child's answer has a fixed ceiling.** The limit was 8 MiB per page times the
+   pages allowed, so a large `BRIEVIE_MAX_PAGES` (an unbounded setting) let the child write,
+   and the parent read, parse and decode, gigabytes. The limit is now
+   `min(8 MiB x pages, 64 MiB)` (`ANSWER_BYTES_MAX`), the same number as the child's own
+   `RLIMIT_FSIZE`, and each page's base64 is refused over 8 MiB on its own. Ruling: 64 MiB
+   fits 30 letter pages of about 1.6 MB each as JPEG (letters are mostly white and far
+   smaller); a scan's whole upload is 32 MiB (`BRIEVIE_MAX_UPLOAD_BYTES`). A file over it is
+   refused as unreadable, as an oversized answer was before.
