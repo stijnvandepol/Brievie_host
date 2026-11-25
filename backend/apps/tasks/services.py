@@ -47,6 +47,9 @@ from apps.workspaces.models import Membership, Workspace
 LIST_MAX = 500
 # What a list row names besides the task: its letter and the people around it.
 TASK_RELATED: Final = ("document", "assigned_to", "assigned_by", "completed_by")
+# A task row never shows its letter's text: the lists leave it (and the search vector,
+# about as large) in the database (measured, DECISIONS 2026-11-25).
+LETTER_TEXT: Final = ("document__ocr_text", "document__search_vector")
 _STATUSES = (*Task.Status.values, "all")
 
 
@@ -76,7 +79,7 @@ def list_tasks(workspace: Workspace, *, status: str = "open") -> list[Task]:
             "id", flat=True
         )[:LIST_MAX]
     )
-    by_id = Task.objects.select_related("document").in_bulk(ids)
+    by_id = Task.objects.select_related("document").defer(*LETTER_TEXT).in_bulk(ids)
     return _with_people([by_id[task_id] for task_id in ids if task_id in by_id])
 
 
@@ -357,7 +360,7 @@ def my_tasks(
     condition = _part_filter(part, facts)
     if condition is not None:
         tasks = tasks.filter(condition)
-    tasks = tasks.select_related("document")
+    tasks = tasks.select_related("document").defer(*LETTER_TEXT)
     active = active_q(today)
     mine_snoozed = snoozed_by(facts.user_id, today)
     if status == Task.Status.OPEN:
