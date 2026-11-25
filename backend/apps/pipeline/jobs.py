@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 QUEUE = "pipeline"
 MAX_ATTEMPTS = 3
-# Longer than a job with all its retries can take: an uploaded file of 30 pages that needs
-# OCR on every page takes up to 30 x 60 s before the AI call (intake spec, risks).
+# Longer than a job with all its retries can take: an uploaded file takes up to
+# BRIEVIE_FILE_PROCESSING_SECONDS (10 minutes) for rendering and OCR before the AI call.
 ABANDONED_AFTER = timedelta(minutes=45)
 
 Runner = Callable[[UUID, UUID], None]

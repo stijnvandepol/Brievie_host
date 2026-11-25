@@ -13,6 +13,7 @@ from apps.intake.ocr import TesseractOcr
 from apps.intake.render import render_pages
 from apps.pipeline.errors import PermanentError
 from tests.intake_fixtures import (
+    FakeClock,
     FakeOcr,
     make_encrypted_pdf,
     make_jpeg,
@@ -45,6 +46,32 @@ def test_the_text_of_a_page_is_cut_to_the_page_limit(settings: Settings) -> None
     settings.BRIEVIE_MAX_PAGE_TEXT_CHARS = 1000
     pages = render_pages(make_pdf([None, None]), FileKind.PDF, FakeOcr("woord " * 2000))
     assert [len(page.text) for page in pages] == [1000, 1000]
+
+
+def test_a_file_stops_when_its_time_budget_is_spent(settings: Settings) -> None:
+    """Security review of PR #58, point 5: one file cannot hold the shared worker for
+    30 x 60 s. Each page gets what is left of the file's budget, and the file fails
+    `file_too_slow` once nothing is left."""
+    settings.BRIEVIE_FILE_PROCESSING_SECONDS = 250
+    settings.BRIEVIE_OCR_TIMEOUT_SECONDS = 60
+    clock = FakeClock()
+    ocr = FakeOcr(clock=clock, seconds=100)
+
+    with pytest.raises(PermanentError) as caught:
+        render_pages(make_pdf([None] * 4), FileKind.PDF, ocr, clock=clock)
+
+    assert caught.value.code == "file_too_slow"
+    assert ocr.timeouts == [60, 60, 50]
+
+
+def test_a_file_within_its_budget_is_read_whole(settings: Settings) -> None:
+    settings.BRIEVIE_FILE_PROCESSING_SECONDS = 250
+    clock = FakeClock()
+    ocr = FakeOcr(clock=clock, seconds=50)
+
+    pages = render_pages(make_pdf([None] * 4), FileKind.PDF, ocr, clock=clock)
+
+    assert len(pages) == 4
 
 
 def test_image_only_page_is_read_once() -> None:

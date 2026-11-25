@@ -145,18 +145,40 @@ def make_encrypted_pdf() -> bytes:
     return _assemble(objects, trailer)
 
 
+class FakeClock:
+    """A monotonic clock a test moves by hand."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
 class FakeOcr:
-    """Returns `text` per call, records the calls, fails on chosen call numbers (1-based)."""
+    """Returns `text` per call, records the calls and the time each was given, fails on
+    chosen call numbers (1-based); moves `clock` by `seconds` per call."""
 
     def __init__(
-        self, text: str = "Tekst van de scan", *, fail_on: frozenset[int] = frozenset()
+        self,
+        text: str = "Tekst van de scan",
+        *,
+        fail_on: frozenset[int] = frozenset(),
+        clock: FakeClock | None = None,
+        seconds: float = 0.0,
     ) -> None:
         self.text = text
         self.fail_on = fail_on
+        self.clock = clock
+        self.seconds = seconds
         self.calls: list[bytes] = []
+        self.timeouts: list[float] = []
 
-    def read(self, jpeg: bytes) -> str:
+    def read(self, jpeg: bytes, *, timeout: float) -> str:
         self.calls.append(jpeg)
+        self.timeouts.append(timeout)
+        if self.clock is not None:
+            self.clock.now += self.seconds
         if len(self.calls) in self.fail_on:
             raise OcrFailedError("ocr_failed")
         return self.text

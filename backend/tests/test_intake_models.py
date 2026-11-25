@@ -31,6 +31,9 @@ def test_original_has_its_own_place_and_aad() -> None:
     assert original_aad(workspace_id, document_id) != page_aad(workspace_id, document_id, 1)
 
 
-def test_abandoned_after_exceeds_worst_ocr() -> None:
-    worst = timedelta(seconds=settings.BRIEVIE_MAX_PAGES * settings.BRIEVIE_OCR_TIMEOUT_SECONDS)
-    assert worst < ABANDONED_AFTER
+def test_abandoned_after_exceeds_a_files_time_budget() -> None:
+    # The budget bounds rendering and OCR of one file (security review of PR #58).
+    assert timedelta(seconds=settings.BRIEVIE_FILE_PROCESSING_SECONDS) < ABANDONED_AFTER
+    assert settings.BRIEVIE_FILE_PROCESSING_SECONDS < (
+        settings.BRIEVIE_MAX_PAGES * settings.BRIEVIE_OCR_TIMEOUT_SECONDS
+    )

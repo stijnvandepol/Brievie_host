@@ -5,6 +5,8 @@ every page (a PDF's own text layer is not used). The text is returned unmasked: 
 before it is stored. Failures are `PermanentError` with a code `mark_failed` shows.
 """
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -26,12 +28,19 @@ class RenderedPage:
     text: str
 
 
-def render_pages(data: bytes, kind: FileKind, ocr: OcrEngine) -> list[RenderedPage]:
+def render_pages(
+    data: bytes, kind: FileKind, ocr: OcrEngine, *, clock: Callable[[], float] = time.monotonic
+) -> list[RenderedPage]:
+    """The file's pages and their text, within `BRIEVIE_FILE_PROCESSING_SECONDS` for the
+    whole file (security review of PR #58): rendering and each page's OCR get at most what
+    is left, and a file that runs out fails `file_too_slow`."""
+    deadline = clock() + settings.BRIEVIE_FILE_PROCESSING_SECONDS
     max_pages = settings.BRIEVIE_MAX_PAGES
     if kind is FileKind.PDF:
         timeout = RENDER_TIMEOUT_BASE + RENDER_TIMEOUT_PER_PAGE * max_pages
     else:
         timeout = RENDER_TIMEOUT_BASE
+    timeout = min(timeout, deadline - clock())
     try:
         parsed = sandbox.render(data, kind=kind.value, max_pages=max_pages, timeout=timeout)
     except IsolationError as error:
@@ -44,8 +53,11 @@ def render_pages(data: bytes, kind: FileKind, ocr: OcrEngine) -> list[RenderedPa
     pages: list[RenderedPage] = []
     failed = 0
     for page in parsed:
+        left = deadline - clock()
+        if left <= 0:
+            raise PermanentError("file_too_slow")
         try:
-            text = ocr.read(page.jpeg)
+            text = ocr.read(page.jpeg, timeout=min(settings.BRIEVIE_OCR_TIMEOUT_SECONDS, left))
         except OcrFailedError:
             failed += 1
             text = ""

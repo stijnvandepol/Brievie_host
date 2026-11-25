@@ -19,7 +19,7 @@ from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, 
 from apps.documents import services as document_services
 from apps.documents.models import Document
 from apps.documents.schemas import DocumentOut, FileMetadataIn
-from apps.documents.upload_limits import check_upload_limits
+from apps.documents.upload_limits import check_file_upload_limits
 from apps.intake import services
 from apps.intake.files import FileRefusedError
 from apps.workspaces.deps import workspace_member
@@ -77,8 +77,8 @@ def refusal(error: FileRefusedError) -> ApiError:
     " document answers `processing` with no pages yet. The same `client_id` and file"
     " again answers 200 with the existing document, another file 409 `document_conflict`."
     " 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`,"
-    " `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (the limits of"
-    " `createDocument`, shared with it). A read-only member gets 403.",
+    " `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (lower limits of its"
+    " own, and those shared with `createDocument`). A read-only member gets 403.",
 )
 def upload_document_file(
     request: HttpRequest,
@@ -88,7 +88,7 @@ def upload_document_file(
 ) -> Status[DocumentOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     user = current_user(request)
-    check_upload_limits(request, workspace_id=workspace_id, user_id=user.id)
+    check_file_upload_limits(request, workspace_id=workspace_id, user_id=user.id)
     try:
         parsed = FileMetadataIn.model_validate_json(metadata)
     except ValidationError:

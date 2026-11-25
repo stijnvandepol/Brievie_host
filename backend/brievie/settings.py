@@ -371,6 +371,9 @@ BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=3355
 BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
 # Tesseract's time per page of an uploaded file (intake spec S 1.1).
 BRIEVIE_OCR_TIMEOUT_SECONDS: int = env.int("BRIEVIE_OCR_TIMEOUT_SECONDS", default=60)
+# All the worker may spend on one uploaded file, rendering and OCR together (security review
+# of PR #58): a file built to be slow fails `file_too_slow` instead of holding the worker.
+BRIEVIE_FILE_PROCESSING_SECONDS: int = env.int("BRIEVIE_FILE_PROCESSING_SECONDS", default=600)
 # An export (a member's archive, an admin's "Alles exporteren") holds every page twice; one
 # larger than this is refused, and so is one the disk has no room for with this much to
 # spare (security review of PR #54, point 2).
@@ -383,6 +386,13 @@ BRIEVIE_EXPORT_FREE_RESERVE_BYTES: int = env.int(
 # worker's queue for every workspace. Ninja's rate format: count/period (s, m, h, d).
 BRIEVIE_UPLOADS_PER_MEMBER: str = env.str("BRIEVIE_UPLOADS_PER_MEMBER", default="60/10m")
 BRIEVIE_UPLOADS_PER_WORKSPACE: str = env.str("BRIEVIE_UPLOADS_PER_WORKSPACE", default="600/1h")
+# A file (PDF or photo from a browser) also costs rendering and OCR on the shared worker: a
+# lower limit of its own, on top of the shared one (security review of PR #58). 50 per
+# member is one full selection in the web.
+BRIEVIE_FILE_UPLOADS_PER_MEMBER: str = env.str("BRIEVIE_FILE_UPLOADS_PER_MEMBER", default="50/10m")
+BRIEVIE_FILE_UPLOADS_PER_WORKSPACE: str = env.str(
+    "BRIEVIE_FILE_UPLOADS_PER_WORKSPACE", default="200/1h"
+)
 BRIEVIE_MAX_PAGE_TEXT_CHARS: int = env.int("BRIEVIE_MAX_PAGE_TEXT_CHARS", default=20000)
 # Uploaded files stay in memory, whatever their size: a temporary file would be an
 # unencrypted copy of a page on disk. Set globally, because the session's CSRF check

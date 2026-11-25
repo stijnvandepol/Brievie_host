@@ -28,10 +28,8 @@ class _CountedThrottle(CallerThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self._ident}
 
 
-def check_upload_limits(request: HttpRequest, *, workspace_id: UUID, user_id: UUID) -> None:
-    """429 `too_many_uploads` when this member, or the whole workspace, uploaded too much
-    in the window; `Retry-After` says when the next one fits."""
-    checks = (
+def _shared(workspace_id: UUID, user_id: UUID) -> list[_CountedThrottle]:
+    return [
         _CountedThrottle(
             "document_upload_member",
             settings.BRIEVIE_UPLOADS_PER_MEMBER,
@@ -40,7 +38,34 @@ def check_upload_limits(request: HttpRequest, *, workspace_id: UUID, user_id: UU
         _CountedThrottle(
             "document_upload_workspace", settings.BRIEVIE_UPLOADS_PER_WORKSPACE, str(workspace_id)
         ),
-    )
+    ]
+
+
+def check_upload_limits(request: HttpRequest, *, workspace_id: UUID, user_id: UUID) -> None:
+    """429 `too_many_uploads` when this member, or the whole workspace, uploaded too much
+    in the window; `Retry-After` says when the next one fits."""
+    _check(request, _shared(workspace_id, user_id))
+
+
+def check_file_upload_limits(request: HttpRequest, *, workspace_id: UUID, user_id: UUID) -> None:
+    """The file upload's limits: its own, lower ones (a file also costs rendering and OCR
+    on the shared worker; security review of PR #58), then the ones shared with scans."""
+    files = [
+        _CountedThrottle(
+            "file_upload_member",
+            settings.BRIEVIE_FILE_UPLOADS_PER_MEMBER,
+            f"{workspace_id}:{user_id}",
+        ),
+        _CountedThrottle(
+            "file_upload_workspace",
+            settings.BRIEVIE_FILE_UPLOADS_PER_WORKSPACE,
+            str(workspace_id),
+        ),
+    ]
+    _check(request, [*files, *_shared(workspace_id, user_id)])
+
+
+def _check(request: HttpRequest, checks: list[_CountedThrottle]) -> None:
     for throttle in checks:
         if not throttle.allow_request(request):
             wait = throttle.wait()

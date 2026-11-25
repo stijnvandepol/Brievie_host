@@ -16,20 +16,22 @@ class OcrFailedError(Exception):
 
 
 class OcrEngine(Protocol):
-    def read(self, jpeg: bytes) -> str: ...
+    def read(self, jpeg: bytes, *, timeout: float) -> str:
+        """The page's text; at most `timeout` seconds (also capped by the engine's own)."""
+        ...
 
 
 class TesseractOcr:
     def __init__(self, *, timeout: float) -> None:
         self.timeout = timeout
 
-    def read(self, jpeg: bytes) -> str:
+    def read(self, jpeg: bytes, *, timeout: float) -> str:
         try:
             result = subprocess.run(  # noqa: S603 - fixed arguments, no shell
                 ["tesseract", "stdin", "stdout", "-l", LANGUAGES],  # noqa: S607
                 input=jpeg,
                 capture_output=True,
-                timeout=self.timeout,
+                timeout=min(self.timeout, timeout),
                 check=False,
                 env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "OMP_THREAD_LIMIT": "1"},
             )

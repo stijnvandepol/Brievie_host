@@ -8,11 +8,12 @@ from pathlib import Path
 from django.conf import settings as django_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
+from pytest_django import Settings
 
 from apps.documents.models import Document
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
-from tests.documents_support import admin_of, bearer_for, jpeg, upload
+from tests.documents_support import admin_of, bearer_for, jpeg, upload, upload_file
 from tests.factories import UserFactory
 from tests.intake_fixtures import make_encrypted_pdf, make_pdf
 
@@ -71,6 +72,48 @@ def test_a_member_uploads_a_pdf(ws_a: Workspace) -> None:
     assert body["page_count"] == 0
     with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=body["id"]).scanned_by == admin
+
+
+def test_file_uploads_have_a_lower_limit_than_scans(ws_a: Workspace, settings: Settings) -> None:
+    """Security review of PR #58, point 5: a file costs the shared worker rendering and OCR
+    on top of what a scan costs, so files have their own, lower limit; scans from the app
+    still go through."""
+    settings.BRIEVIE_FILE_UPLOADS_PER_MEMBER = "2/10m"
+    client = _client(admin_of(ws_a))
+
+    codes = [upload_file(client, ws_a.id, make_pdf([f"Brief {n}"])).status_code for n in range(3)]
+
+    assert codes == [201, 201, 429]
+    assert upload(client, ws_a.id, [jpeg("een scan")]).status_code == 201
+
+
+def test_a_workspace_has_a_file_limit_of_its_own(ws_a: Workspace, settings: Settings) -> None:
+    settings.BRIEVIE_FILE_UPLOADS_PER_WORKSPACE = "1/1h"
+    first = _client(admin_of(ws_a))
+    other = UserFactory.create()
+    Membership.objects.create(user=other, workspace=ws_a, role=Membership.Role.MEMBER)
+
+    assert upload_file(first, ws_a.id, make_pdf(["Een"])).status_code == 201
+    r = upload_file(_client(other), ws_a.id, make_pdf(["Twee"]))
+    assert r.status_code == 429
+    assert r.json()["code"] == "too_many_uploads"
+
+
+def test_the_default_file_limits_are_below_the_scan_limits() -> None:
+    from apps.common.throttling import CallerThrottle
+
+    def per_hour(rate: str) -> float:
+        count, seconds = CallerThrottle("x", rate).parse_rate(rate)
+        assert count is not None
+        assert seconds is not None
+        return count * 3600 / seconds
+
+    assert per_hour(django_settings.BRIEVIE_FILE_UPLOADS_PER_MEMBER) < per_hour(
+        django_settings.BRIEVIE_UPLOADS_PER_MEMBER
+    )
+    assert per_hour(django_settings.BRIEVIE_FILE_UPLOADS_PER_WORKSPACE) < per_hour(
+        django_settings.BRIEVIE_UPLOADS_PER_WORKSPACE
+    )
 
 
 def test_a_viewer_cannot_upload(ws_a: Workspace) -> None:
