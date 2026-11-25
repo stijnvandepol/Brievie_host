@@ -1,6 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { delay } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import {
@@ -121,24 +120,33 @@ describe("Brief toevoegen", () => {
   });
 
   it("has at most three requests in flight", async () => {
+    // The server holds every request until the test lets it go: no timers, so a busy
+    // runner cannot change what is in flight when it is counted.
     let inFlight = 0;
     let most = 0;
+    const held: (() => void)[] = [];
     server.use(
       ...loggedInHandlers(),
       ...documentHandlers(),
       http.post(uploadUrl, async () => {
         inFlight += 1;
         most = Math.max(most, inFlight);
-        await delay(30);
+        await new Promise<void>((resolve) => held.push(resolve));
         inFlight -= 1;
         return HttpResponse.json(documentSummary, { status: 201 });
       }),
     );
     renderApp(archive);
     await choose([1, 2, 3, 4, 5].map((n) => pdf(`brief-${n}.pdf`)));
+    await waitFor(() => expect(held).toHaveLength(3));
+    expect(screen.getAllByText("Bezig met uploaden…")).toHaveLength(3);
+    expect(screen.getAllByText("Wacht…")).toHaveLength(2);
+    for (let released = 0; released < 5; released += 1) {
+      await waitFor(() => expect(held.length).toBeGreaterThan(0));
+      held.shift()?.();
+    }
     await waitFor(
       () => expect(screen.getAllByText("Toegevoegd. Brievie leest de brief nu.")).toHaveLength(5),
-      // Five uploads in two rounds: slower on a busy CI runner.
       { timeout: 5000 },
     );
     expect(most).toBe(3);
