@@ -6,7 +6,7 @@ import django.db.models.deletion
 import django.db.models.functions.text
 from django.db import migrations, models
 
-from apps.workspaces.rls import enable_rls
+from apps.workspaces.rls import enable_rls, restrict_to_visible_documents
 
 
 class Migration(migrations.Migration):
@@ -170,6 +170,8 @@ class Migration(migrations.Migration):
             },
         ),
         enable_rls("intake_scanfile"),
+        # A row of an imported file follows its letter (the job runs as the system).
+        restrict_to_visible_documents("intake_scanfile", nullable=True),
         enable_rls("intake_scanfolder"),
         enable_rls("intake_scanfoldersettings"),
     ]

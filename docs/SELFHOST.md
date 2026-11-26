@@ -1186,6 +1186,8 @@ V VPN, T tunnel, P own proxy (empty = default or not used).
 | `BRIEVIE_BACKUP_HOUR` | hour of the nightly back-up | `2` | | | | |
 | `BRIEVIE_ADOPT_VERSION` | compose: moving from `./brievie`, the version that runs | empty | | | | |
 | `BRIEVIE_VERSION` | the version (compose: change it to update; `./brievie` writes it) | the release | | | | |
+| `BRIEVIE_SCAN_DIR` | the scan folder on this server (only the `intake` service sees it) | empty: none | | | | |
+| `BRIEVIE_SCAN_GID` | the group that may read and write the scan folder | `100` | | | | |
 | `BRIEVIE_AUDIT_RETENTION_DAYS` | days the audit log keeps rows (at least 90) | `365` | | | | |
 | `BRIEVIE_SESSION_IDLE_DAYS` / `BRIEVIE_SESSION_MAX_DAYS` | web session limits | `14` / `90` | | | | |
 | `BRIEVIE_AI_AUTOPILOT_ALLOWED` | may workspaces switch on the autopilot | `true` | | | | |
