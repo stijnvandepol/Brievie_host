@@ -4,7 +4,7 @@ import { createRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
 import { Label, Radio, RadioGroup, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { workspaceSettingsQuery } from "../api/queries";
+import { scanFolderQuery, workspaceSettingsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PrivacySettings } from "../components/privacy-settings";
@@ -98,8 +98,30 @@ function SettingsPage() {
           {t`AI`}
         </Link>
       </Entry>
+      {admin ? <ScanFolderEntry workspaceId={workspace.id} /> : null}
       {admin ? <WorkspaceSettings workspace={workspace} /> : null}
     </Shell>
+  );
+}
+
+/** "Scanmap": only when the server has a scan folder (an admin's page). */
+function ScanFolderEntry({ workspaceId }: { workspaceId: string }) {
+  const scan = useQuery(scanFolderQuery(workspaceId));
+  if (!scan.data?.available) return null;
+  return (
+    <Entry
+      id="settings-scan-folder"
+      title={t`Scanmap`}
+      text={t`Laat een scanner brieven in een map op je NAS zetten; Brievie haalt ze op.`}
+    >
+      <Link
+        to="/w/$workspaceId/instellingen/scanmap"
+        params={{ workspaceId }}
+        className="button secondary"
+      >
+        {t`Scanmap`}
+      </Link>
+    </Entry>
   );
 }
 

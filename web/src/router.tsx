@@ -26,6 +26,7 @@ import { postAccessRoute } from "./routes/post-access";
 import { recoverySheetRoute } from "./routes/recovery-sheet";
 import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
+import { scanFolderRoute } from "./routes/scan-folder";
 import { searchRoute } from "./routes/search";
 import { securityRoute } from "./routes/security";
 import { serverAuditLogRoute } from "./routes/server-audit-log";
@@ -80,6 +81,7 @@ const routeTree = rootRoute.addChildren([
     labelsRoute,
     automationsRoute,
     aiRoute,
+    scanFolderRoute,
     newRuleRoute,
     ruleRoute,
   ]),
