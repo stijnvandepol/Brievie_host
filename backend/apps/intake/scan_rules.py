@@ -113,6 +113,12 @@ def _safe(display_name: str) -> str:
     return name[:FOLDER_NAME_MAX].rstrip(". ") or "map"
 
 
+def valid_person_folder_name(name: str) -> bool:
+    """A name an admin gives a person's or department's folder: already safe for SMB (no
+    character `person_folder_names` would remove), at most 60, not reserved."""
+    return bool(name) and _safe(name) == name and not is_reserved(name)
+
+
 def _numbered(base: str, number: int) -> str:
     suffix = f" ({number})"
     return base[: FOLDER_NAME_MAX - len(suffix)].rstrip(". ") + suffix

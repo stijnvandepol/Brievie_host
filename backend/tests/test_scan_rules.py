@@ -18,6 +18,7 @@ from apps.intake.scan_rules import (
     scan_client_id,
     stable,
     valid_folder_name,
+    valid_person_folder_name,
 )
 
 A = uuid.UUID("00000000-0000-0000-0000-00000000000a")
@@ -172,6 +173,24 @@ def test_long_names_are_cut_with_room_for_the_number() -> None:
     assert names[A] == "x" * 60
     assert names[B].endswith(" (2)")
     assert len(names[B]) <= 60
+
+
+@pytest.mark.parametrize(
+    ("name", "valid"),
+    [
+        ("Oude scans", True),
+        ("Financien (2)", True),
+        ("", False),
+        ("mislukt", False),
+        (".verborgen", False),
+        ("a/b", False),
+        ("naam.", False),
+        (" naam", False),
+        ("x" * 61, False),
+    ],
+)
+def test_valid_person_folder_names(name: str, valid: bool) -> None:
+    assert valid_person_folder_name(name) is valid
 
 
 # Which folders exist
