@@ -156,7 +156,7 @@ function Page({ found }: { found: ExternalAccess }) {
         on={ownOn}
         urls={ownOn ? urls("public") : []}
       >
-        <p>{t`Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet.`}</p>
+        <p>{t`Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet. Zet nooit een poort van je router of een gewone TCP-doorstuurder naar Brievie: die voegt geen proxy-kopregels toe en telt als thuis.`}</p>
         {found.untrusted_public_name_peer ? (
           <MessageBar intent="warning">
             {t`Verzoeken via een proxy of voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:`}{" "}

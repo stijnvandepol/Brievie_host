@@ -140,6 +140,18 @@ def test_the_api_makes_no_outgoing_call() -> None:
         assert needle not in source, needle
 
 
+def test_a_public_name_alone_is_a_public_way(home: Settings) -> None:
+    # Your own tunnel needs no trusted proxy: the second-step lines show with the name only.
+    with_public(home)
+    home.BRIEVIE_PUBLIC_WEB = True
+    home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
+    found = codes(admin_without_factor=True)
+    assert "public_web_second_factor_required" in found
+    assert "public_web_admin_without_second_factor" in found
+    home.BRIEVIE_PUBLIC_WEB = False
+    assert "public_web_off" in codes()
+
+
 def test_check_public_web_without_second_factor_and_public_web_off(home: Settings) -> None:
     with_public(home)
     home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]

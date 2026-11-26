@@ -991,6 +991,11 @@ The four hooks, all in `deploy/.env` (or the variables of the compose-only insta
 | `BRIEVIE_TRUSTED_PROXIES` | the address(es) your tunnel or proxy connects from; only then is its `X-Forwarded-For` believed |
 | `BRIEVIE_PUBLIC_WEB` | the web interface on the public route (off: only the app works) |
 
+**Never forward a router port, or a plain TCP forwarder, to Brievie.** It adds no proxy header, so
+Brievie counts such a request as coming from home (private route: web sign-in without the
+second step, pairing). Use a VPN, a tunnel, or a reverse proxy that adds its headers, with
+`BRIEVIE_PUBLIC_HOSTNAME` set.
+
 Whatever you use forwards to Caddy's normal **https port** (`BRIEVIE_HTTPS_PORT`). There is no
 other listener. Through the public name **only the app works** by default: the web
 interface and its password sign-in stay closed there (403 "Op dit adres werkt alleen de
@@ -1003,7 +1008,9 @@ while a server admin has not switched it on. The VPN stays the better way.
 `BRIEVIE_TUNNEL_TOKEN_FILE` and `COMPOSE_PROFILES=tunnel` no longer do anything. `./brievie
 start` tells you so in Dutch and goes on (it never refuses to start, and the home network keeps
 working). Set up your own tunnel as below, set `BRIEVIE_PUBLIC_HOSTNAME` to its public name and
-remove the old lines. A compose file of an older release that still has a `cloudflared` service
+remove the old lines. Take the compose file of this release together with the new
+`BRIEVIE_VERSION` (a pasted older file passes the old variable, which the new proxy still
+understands, but it also keeps the old `cloudflared` service). A compose file of an older release that still has a `cloudflared` service
 only runs it with `COMPOSE_PROFILES=tunnel`, and it forwards to a listener that no longer
 exists: use the file of this release.
 
@@ -1034,9 +1041,10 @@ like (the same NAS, another machine).
 ```
 BRIEVIE_HOSTNAME=192.168.1.20
 BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl
-# The address your cloudflared connects from, as Brievie sees it (a container on the same
-# host: its address on the network it shares with Caddy; check the page, see below):
-BRIEVIE_TRUSTED_PROXIES=192.168.1.20/32
+# Optional: the address your cloudflared connects from, as Brievie sees it. Never Docker's
+# own gateway address (see "Own reverse proxy"). Leave it out when unsure: the public name
+# is public anyway, only the visitors then share cloudflared's address for sign-in limits.
+# BRIEVIE_TRUSTED_PROXIES=
 # Only when you know what it means (see above):
 # BRIEVIE_PUBLIC_WEB=true
 ```

@@ -61,6 +61,21 @@ def test_an_old_tunnel_setting_gets_a_clear_message_and_the_start_goes_on(
     assert "--profile" not in installed.commands()[up]
 
 
+def test_start_removes_the_orphan_cloudflared_container(installed: Install) -> None:
+    result = installed.run("start")
+    assert result.returncode == 0, result.stderr
+    assert "--remove-orphans" in installed.commands()[installed.index("up -d --build --wait")]
+
+
+def test_a_public_name_alone_gets_the_red_sentence_with_public_web(installed: Install) -> None:
+    with_settings(
+        installed, "BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl", "BRIEVIE_PUBLIC_WEB=true"
+    )
+    result = installed.run("start")
+    assert result.returncode == 0, result.stderr
+    assert "zonder tweede stap" in result.stdout
+
+
 def test_the_old_token_never_appears_in_an_argv_or_output(installed: Install) -> None:
     with_settings(installed, f"BRIEVIE_TUNNEL_TOKEN={TOKEN}")
     result = installed.run("start")

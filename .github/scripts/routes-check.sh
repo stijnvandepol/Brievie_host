@@ -14,6 +14,7 @@
 #                                second step counts as none (and only because of that step), a
 #                                password sign-in gets the outside sentence, and a forwarded
 #                                address from an untrusted peer changes nothing)
+#   routes-check.sh oldenv       Caddy with only the 0.5.0 variable: the public name is still public
 #   routes-check.sh isolation    a request that reaches the api without Caddy counts as public
 #
 # Needs COMPOSE, PUBLIC_HOST (the public name the stack serves), VPN_HOST and RUNNER_TEMP.
@@ -26,28 +27,6 @@ trap 'rm -rf "${work:?}"' EXIT
 # Which check failed: the line, never a value.
 set -E
 trap 'echo "routes-check.sh: a check failed at line $LINENO." >&2' ERR
-
-# One HTTP request from inside the api container to Caddy (the compose network).
-# Prints "<status>\n<headers as JSON>\n<body>".
-inside() { # $1 method, $2 host:port, $3 path, $4 JSON of headers, $5 body size (bytes), [$6 body]
-	$COMPOSE exec -T api python - "$@" <<'PY'
-import http.client, json, sys
-method, target, path, headers, size = sys.argv[1:6]
-host, port = target.split(":")
-conn = http.client.HTTPConnection(host, int(port), timeout=10)
-body = b"x" * int(size) if int(size) else None
-if len(sys.argv) > 6:
-    body = sys.argv[6].encode()
-try:
-    conn.request(method, path, body=body, headers=json.loads(headers))
-except (BrokenPipeError, ConnectionResetError):
-    pass  # Caddy answered 413 before the whole body was sent; its answer is still read.
-resp = conn.getresponse()
-print(resp.status)
-print(json.dumps({k.lower(): v for k, v in resp.getheaders()}))
-print(resp.read().decode("utf-8", "replace"))
-PY
-}
 
 # Whether the session with key $1 counts as having passed the second step ($2: True|False),
 # straight in the database from inside the api container. Fails unless one row changed.
@@ -71,6 +50,16 @@ outside() {
 header_of() { sed -n 2p "$1" | python3 -c "import json,sys; print(json.load(sys.stdin).get('$2', ''))"; }
 status_of() { sed -n 1p "$1"; }
 body_of() { sed -n '3,$p' "$1"; }
+
+# Caddy was recreated with only the 0.5.0 compose file's variable (BRIEVIE_TUNNEL_HOST): a request
+# for the public name with no proxy header at all must still be the public route, which
+# pairing tells (403 pair_at_home).
+check_oldenv() {
+	answer=$(outside --retry 10 --retry-delay 2 --retry-all-errors --request POST \
+		--header 'Content-Type: application/json' "https://$PUBLIC_HOST/api/v1/devices/pairing-challenges")
+	test "$(jq -r .code <<<"$answer")" = pair_at_home
+	echo "Old compose variable: the public name is still the public route."
+}
 
 check_caddy() {
 	$COMPOSE exec -T caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >"$work/caddy.json"
@@ -320,10 +309,11 @@ PY
 case ${1:-} in
 caddy) check_caddy ;;
 isolation) check_isolation ;;
+oldenv) check_oldenv ;;
 listeners) check_listeners ;;
 session) check_session "${2:-}" ;;
 *)
-	echo "usage: routes-check.sh caddy|listeners|isolation|session JAR" >&2
+	echo "usage: routes-check.sh caddy|listeners|isolation|oldenv|session JAR" >&2
 	exit 2
 	;;
 esac

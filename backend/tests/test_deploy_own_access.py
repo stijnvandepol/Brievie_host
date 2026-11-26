@@ -144,7 +144,9 @@ def test_ci_checks_the_public_route_without_a_tunnel() -> None:
             assert f"routes-check.sh {mode}" in block, (name, mode)
         assert "routes-check.sh token" not in block, name
         assert "--profile tunnel" not in block, name
-        assert "TUNNEL" not in block, name
+        assert "BRIEVIE_TUNNEL_TOKEN" not in block, name
+    assert "routes-check.sh oldenv" in ci_job("stack")
+    assert "BRIEVIE_TUNNEL_HOST: $PUBLIC_HOST" in ci_job("stack")
     assert 'BRIEVIE_PUBLIC_WEB: "true"' in ci_job("compose-stack")
     assert "BRIEVIE_PUBLIC_HOSTNAME=$PUBLIC_HOST" in ci_job("stack")
 
@@ -153,7 +155,7 @@ def test_ci_validates_the_caddyfile_and_scans_no_cloudflared_image() -> None:
     image = ci_job("image")
     assert "cloudflared" not in image
     assert image.count("caddy validate --config /etc/caddy/Caddyfile") == 3
-    assert "BRIEVIE_TUNNEL_HOST" not in CI_TEXT
+    assert "BRIEVIE_TUNNEL_HOST" not in image
     assert not (ROOT / ".trivyignore.cloudflared.yaml").exists()
 
 

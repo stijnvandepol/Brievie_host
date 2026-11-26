@@ -76,7 +76,7 @@ def check_external_access(
 ) -> list[CheckMessage]:
     """Warnings, never a refusal: the home network must keep working whatever is set."""
     messages: list[CheckMessage] = []
-    public_way = bool(settings.BRIEVIE_TRUSTED_PROXIES)
+    public_way = bool(settings.BRIEVIE_TRUSTED_PROXIES) or bool(settings.BRIEVIE_PUBLIC_HOSTNAME)
     # Without Caddy no request counts as public (apps.access.route): nothing asks the second
     # step outside then.
     second_step_outside = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE and settings.BRIEVIE_BEHIND_CADDY
@@ -92,7 +92,7 @@ def check_external_access(
                 id="brievie.W002",
             )
         )
-    if settings.BRIEVIE_PUBLIC_HOSTNAME and not public_way:
+    if settings.BRIEVIE_PUBLIC_HOSTNAME and not settings.BRIEVIE_TRUSTED_PROXIES:
         messages.append(
             Warning(
                 "BRIEVIE_PUBLIC_HOSTNAME is set, but not BRIEVIE_TRUSTED_PROXIES: requests for "

@@ -1352,8 +1352,8 @@ msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
 msgstr "Brievie leest deze brief nog. Je hoeft niets te doen."
 
 #: src/routes/server-external-access.tsx
-msgid "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet."
-msgstr "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet."
+msgid "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet. Zet nooit een poort van je router of een gewone TCP-doorstuurder naar Brievie: die voegt geen proxy-kopregels toe en telt als thuis."
+msgstr "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet. Zet nooit een poort van je router of een gewone TCP-doorstuurder naar Brievie: die voegt geen proxy-kopregels toe en telt als thuis."
 
 #: src/routes/visibility.tsx
 msgid "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."

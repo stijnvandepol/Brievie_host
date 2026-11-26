@@ -102,6 +102,16 @@ def code(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
+# A compose-only install keeps its pasted compose file while BRIEVIE_VERSION moves on: the
+# 0.5.0 file passes BRIEVIE_TUNNEL_HOST, this release's passes BRIEVIE_PUBLIC_HOST_MATCH.
+# The Caddyfile must honour both, or the public name stops being public by name (H1 of the
+# review of PR #65).
+OLD_AND_NEW_MATCH = (
+    "@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid} "
+    "{$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}"
+)
+
+
 def site_home() -> str:
     return block("\n{$BRIEVIE_HOSTNAME} {$BRIEVIE_VPN_HOSTNAME} {$BRIEVIE_PUBLIC_HOSTNAME} {")
 
@@ -128,8 +138,10 @@ def test_there_is_no_tunnel_listener_and_no_cf_connecting_ip() -> None:
     assert "8080" not in text
     assert "CF-Connecting-IP" not in text
     assert "client_ip_headers" not in text
-    assert "tunnel" not in text.lower()
-    assert "BRIEVIE_TUNNEL" not in CADDYFILE
+    assert "tunnel" not in text.replace("BRIEVIE_TUNNEL_HOST", "").lower()
+    # Only the old name of the public-name match stays, for an older compose file.
+    assert text.count("BRIEVIE_TUNNEL") == 1
+    assert "BRIEVIE_TUNNEL_TOKEN" not in CADDYFILE
     # One site only: every name Caddy answers is served by the block that decides the route.
     sites = [line for line in re.findall(r"^[^\s(#].*\{$", text, re.MULTILINE)]
     assert len(sites) == 1, sites
@@ -158,7 +170,7 @@ def test_a_users_own_cloudflared_on_443_lands_on_the_public_route() -> None:
         "{$BRIEVIE_PUBLIC_HOSTNAME}"
         in CADDYFILE.split("\n{$BRIEVIE_HOSTNAME}", 1)[1].split("\n", 1)[0]
     )
-    assert "@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid}" in home
+    assert OLD_AND_NEW_MATCH in home
     for name in ("public_name", "proxied_xff"):
         variables = block(f"vars @{name} {{")
         assert "brievie_route public" in variables, name
@@ -174,7 +186,7 @@ def test_the_route_on_443_is_decided_by_name_first_and_fails_closed() -> None:
     # and Cloudflare's headers on :443 make a request public too.
     home = site_home()
     assert "@direct not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
-    assert "@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid}" in home
+    assert OLD_AND_NEW_MATCH in home
     assert "@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
     assert "@cf_ray header Cf-Ray *" in home
     assert "@cf_client header Cf-Connecting-Ip *" in home

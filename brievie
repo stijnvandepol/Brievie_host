@@ -844,7 +844,7 @@ print_external_addresses() {
 	fi
 	case $(unquote "$(env_value BRIEVIE_PUBLIC_WEB)" | tr '[:upper:]' '[:lower:]') in
 	1 | true | yes | on)
-		if [ -n "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+		if [ -n "$(env_value BRIEVIE_TRUSTED_PROXIES)" ] || [ -n "$public_name" ]; then
 			echo "Let op: inloggen op de webinterface kan van buiten zonder tweede stap (BRIEVIE_PUBLIC_WEB=true). Zet het uit of gebruik een VPN."
 		fi
 		;;
@@ -1115,7 +1115,7 @@ cmd_start() {
 			fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
 	fi
 	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
-	with_watchdog "typ daarna opnieuw ./brievie start." quietly all compose_raw up -d --build --wait ||
+	with_watchdog "typ daarna opnieuw ./brievie start." quietly all compose_raw up -d --build --wait --remove-orphans ||
 		fail "Brievie is niet goed gestart. Typ daarna opnieuw ./brievie start."
 	warn_old_tunnel
 	ensure_backup_role ||

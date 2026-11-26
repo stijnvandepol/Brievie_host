@@ -179,7 +179,8 @@ def external_access_status(
     proxies: list[str] = list(settings.BRIEVIE_TRUSTED_PROXIES)
     public_web: bool = settings.BRIEVIE_PUBLIC_WEB
     second_factor: bool = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE
-    public_way = bool(proxies)
+    # A public name alone is a way: your own tunnel needs no trusted proxy to be public.
+    public_way = bool(proxies) or bool(public_hostname)
 
     public = is_public_route(request)
     seen_as = SeenAs(

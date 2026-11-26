@@ -174,6 +174,13 @@ def test_there_is_no_cloudflare_upload_warning_any_more(settings: Settings) -> N
     assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN_SET")
 
 
+def test_a_public_name_alone_is_a_public_way_for_w002(settings: Settings) -> None:
+    _external(settings, proxies=[], public_web=True)
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    ids = [m.id for m in check_external_access(None)]
+    assert "brievie.W002" in ids
+
+
 def test_w005_public_name_without_trusted_proxies(settings: Settings) -> None:
     _external(settings, proxies=[], public_web=False)
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"

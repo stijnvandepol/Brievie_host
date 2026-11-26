@@ -562,6 +562,17 @@ jobs:
         run: .github/scripts/routes-check.sh session "$RUNNER_TEMP/jar"
       - name: Nobody poses as Caddy
         run: .github/scripts/routes-check.sh isolation
+      # A compose-only install keeps its old compose file while the version moves on: the new
+      # proxy with only the variable of 0.5.0 must still mark the public name as public.
+      - name: The new proxy with the variable of an older compose file
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'services:' '  caddy:' '    environment:' \
+            '      BRIEVIE_PUBLIC_HOST_MATCH: public-hostname-not-set.invalid' \
+            "      BRIEVIE_TUNNEL_HOST: $PUBLIC_HOST" > "$RUNNER_TEMP/old-env.yml"
+          $COMPOSE -f "$RUNNER_TEMP/old-env.yml" up -d --no-deps caddy
+          .github/scripts/routes-check.sh oldenv
+          $COMPOSE up -d --no-deps caddy
       - name: Container state on failure
         if: failure()
         # No logs here: the api log holds the installation code.
