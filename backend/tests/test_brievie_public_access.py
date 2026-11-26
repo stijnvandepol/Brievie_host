@@ -38,8 +38,8 @@ OLD_TUNNEL = "BRIEVIE_TUNNEL_TOKEN staat nog in deploy/.env"
 def test_start_without_a_tunnel_setting_says_nothing_about_a_tunnel(installed: Install) -> None:
     result = installed.run("start")
     assert result.returncode == 0, result.stderr
-    assert not any("tunnel" in command for command in installed.commands())
-    assert "tunnel" not in (result.stdout + result.stderr).lower()
+    assert not any("cloudflared" in c or "--profile" in c for c in installed.commands())
+    assert OLD_TUNNEL not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

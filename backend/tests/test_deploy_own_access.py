@@ -172,4 +172,3 @@ def test_the_routes_script_checks_what_the_review_asks() -> None:
     ):
         assert needle in ROUTES, needle
     assert "caddy:8080" not in ROUTES
-
