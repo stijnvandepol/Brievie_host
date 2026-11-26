@@ -293,7 +293,7 @@ BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
 # Caddy's compose name: only a request whose socket peer has one of its addresses is Caddy's
 # (apps.common.net.from_caddy); a request that reaches the api any other way is public.
 BRIEVIE_CADDY_HOST: str = env.str("BRIEVIE_CADDY_HOST", default="caddy")
-# The web interface and its password sign-in on the public route (tunnel, own reverse
+# The web interface and its password sign-in on the public route (your own tunnel or reverse
 # proxy). Off: there only the app works (device tokens and pairing; S 7.6).
 BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)
 # Your own reverse proxy's address(es), CIDRs separated by spaces: Caddy believes its
@@ -302,12 +302,6 @@ BRIEVIE_TRUSTED_PROXIES: list[str] = env.str("BRIEVIE_TRUSTED_PROXIES", default=
 # A trusted range wider than a /24 (IPv4) or /64 (IPv6) only when this says so
 # (apps.common.checks.check_trusted_proxies); 0.0.0.0/0 and ::/0 never.
 BRIEVIE_TRUSTED_PROXIES_WIDE: bool = env.bool("BRIEVIE_TRUSTED_PROXIES_WIDE", default=False)
-# Whether a Cloudflare Tunnel token is set (as a variable or a file). The api never gets
-# the token itself: only the cloudflared container does.
-BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(
-    env.str("BRIEVIE_TUNNEL_TOKEN_SET", default="").strip()
-    or env.str("BRIEVIE_TUNNEL_TOKEN_FILE_SET", default="").strip()
-)
 # Whether the public route requires a second step for a password sign-in (B2). It does
 # (apps.accounts.signin, two-step plan Task 13): with BRIEVIE_PUBLIC_WEB on, an account
 # without a factor cannot sign in there, and a web session counts there only when it

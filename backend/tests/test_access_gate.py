@@ -1,4 +1,4 @@
-"""The public route (tunnel, own reverse proxy) is app-only unless BRIEVIE_PUBLIC_WEB (S 7.6)."""
+"""The public route (own tunnel or reverse proxy) is app-only unless BRIEVIE_PUBLIC_WEB (S 7.6)."""
 
 import pytest
 from django.test import Client
@@ -383,13 +383,18 @@ def test_an_internet_peer_is_never_remembered() -> None:
 
 
 @pytest.mark.usefixtures("fresh_notes")
-def test_cloudflare_on_the_https_port_is_noted_and_shown_to_the_admin(settings: Settings) -> None:
-    Client().get(
-        "/api/v1/health", headers={"X-Brievie-Route": "public", "X-Brievie-Via": "cloudflare"}
+def test_a_users_own_cloudflared_on_the_https_port_is_public_and_no_problem(
+    settings: Settings,
+) -> None:
+    # Remote access is the user's own tool: Cloudflare's headers on :443 are the normal way
+    # in, served as the public route, and the page no longer calls them a problem.
+    headers = {"X-Brievie-Route": "public", "X-Brievie-Via": "cloudflare"}
+    assert_refused(
+        Client().post("/api/v1/auth/login", {}, content_type="application/json", headers=headers)
     )
     admin = as_user(UserFactory.create(is_server_admin=True))
     body = admin.get("/api/v1/server/external-access", headers=PRIVATE).json()
-    assert {"code": "cloudflare_on_https_port", "level": "problem"} in body["checks"]
+    assert "cloudflare_on_https_port" not in [check["code"] for check in body["checks"]]
 
 
 @pytest.mark.usefixtures("fresh_notes")
@@ -399,7 +404,7 @@ def test_an_unknown_via_value_notes_nothing() -> None:
     Client().get(
         "/api/v1/health", headers={"X-Brievie-Route": "public", "X-Brievie-Via": "nonsense"}
     )
-    assert observed.last_seen("cloudflare_on_https_port") is None
+    assert observed.last_seen("unknown_proxy") is None
 
 
 @pytest.mark.usefixtures("fresh_notes")

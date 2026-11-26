@@ -90,7 +90,7 @@ def test_behind_caddy_a_forged_header_is_never_the_address(settings: Settings) -
 
 
 def test_behind_two_proxies_the_second_entry_from_the_right_counts(settings: Settings) -> None:
-    # A NAS proxy or Cloudflare Tunnel in front of Caddy: Caddy must trust exactly that
+    # A NAS proxy or your own tunnel in front of Caddy: Caddy must trust exactly that
     # proxy (it then appends the proxy's address) and BRIEVIE_PROXY_COUNT must be 2.
     settings.BRIEVIE_PROXY_COUNT = 2
     request = request_from("172.18.0.3", "1.2.3.4, 203.0.113.5, 192.168.1.10")
@@ -133,7 +133,7 @@ def caddy_request(
 def test_cf_connecting_ip_never_counts(
     settings: Settings, behind_caddy: bool, proxy_count: int, with_caddy_header: bool
 ) -> None:
-    # Only Caddy reads CF-Connecting-IP, and only on its unpublished tunnel listener.
+    # Nobody reads CF-Connecting-IP: your own tunnel is trusted through BRIEVIE_TRUSTED_PROXIES.
     settings.BRIEVIE_BEHIND_CADDY = behind_caddy
     settings.BRIEVIE_PROXY_COUNT = proxy_count
     headers = {"CF-Connecting-IP": "203.0.113.66"}

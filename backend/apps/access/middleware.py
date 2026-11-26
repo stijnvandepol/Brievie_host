@@ -192,10 +192,6 @@ def observe(request: HttpRequest) -> None:
         observed.note("public_name_untrusted", peer=peer_ip(request))
     elif way == "unknown_proxy":
         observed.note("unknown_proxy", peer=peer_ip(request))
-    elif way == "cloudflare":
-        observed.note("cloudflare_on_https_port")
-    elif way == "tunnel":
-        observed.note("tunnel")
     if way == "proxy" and client_ip(request) == peer_ip(request):
         # From a trusted proxy without a forwarded client: Docker's own gateway, likely.
         observed.note("proxy_without_forwarding")

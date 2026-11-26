@@ -15,9 +15,10 @@ class AddressOut(Schema):
 
 
 class TunnelOut(Schema):
-    token_set: bool
+    # Kept for older clients: Brievie runs no tunnel any more, so always False / "not_set".
+    token_set: bool = False
     # yes | no | not_set
-    connected: str
+    connected: str = "not_set"
 
 
 class SeenAsOut(Schema):
