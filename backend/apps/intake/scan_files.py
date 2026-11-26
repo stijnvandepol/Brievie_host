@@ -243,19 +243,6 @@ def _fingerprint(info: os.stat_result) -> Fingerprint:
     )
 
 
-def _entries(fd: int) -> list[tuple[str, os.stat_result]]:
-    """Names in the directory with their own `lstat` (a link is reported as a link)."""
-    found: list[tuple[str, os.stat_result]] = []
-    for name in sorted(os.listdir(fd)):
-        if not valid_name(name) or name.startswith("."):
-            continue
-        try:
-            found.append((name, os.stat(name, dir_fd=fd, follow_symlinks=False)))
-        except OSError:
-            continue
-    return found
-
-
 def _regular(info: os.stat_result) -> bool:
     return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
 
@@ -285,18 +272,46 @@ def list_candidates(
 
 
 def count_candidates(root_fd: int, folder: RelPath) -> int:
-    """How many files would be candidates in `folder` (for a folder that is not read)."""
+    """How many names in `folder` look like a candidate, without a `stat` each: a folder
+    flooded with files costs one listing (security review of PR #64, M4). 0 when the
+    folder cannot be read."""
     try:
-        return len(list_candidates(root_fd, folder))
-    except ScanRefusedError:
+        _check(folder)
+        with _folder(root_fd, folder) as fd:
+            return sum(
+                1
+                for name in os.listdir(fd)
+                if valid_name(name) and not name.startswith(".") and is_candidate_name(name)
+            )
+    except (ScanRefusedError, OSError):
         return 0
 
 
 def list_subfolders(root_fd: int, folder: RelPath) -> list[str]:
-    """The directories directly in `folder` (no links), by name."""
+    """The directories directly in `folder` (no links), by name. The kind comes from the
+    listing itself where the filesystem gives it, so a flooded folder needs no `stat` per
+    file."""
     _check(folder)
-    with _folder(root_fd, folder) as fd:
-        return [name for name, info in _entries(fd) if stat.S_ISDIR(info.st_mode)]
+    with _folder(root_fd, folder) as fd, os.scandir(fd) as entries:
+        return sorted(
+            entry.name
+            for entry in entries
+            if valid_name(entry.name) and not entry.name.startswith(".") and _is_folder(entry)
+        )
+
+
+def _is_folder(entry: "os.DirEntry[str]") -> bool:
+    try:
+        return entry.is_dir(follow_symlinks=False)
+    except OSError:
+        return False
+
+
+def _is_file(entry: "os.DirEntry[str]") -> bool:
+    try:
+        return entry.is_file(follow_symlinks=False)
+    except OSError:
+        return False
 
 
 def read_candidate(root_fd: int, path: RelPath, expected: Fingerprint, *, max_bytes: int) -> bytes:
@@ -440,9 +455,13 @@ def list_failed(root_fd: int, folder: RelPath) -> set[str]:
     """The names in `<folder>/mislukt/` (read only)."""
     _check(folder)
     try:
-        with _folder(root_fd, (*folder, RESERVED)) as fd:
-            return {name for name, info in _entries(fd) if stat.S_ISREG(info.st_mode)}
-    except ScanRefusedError:
+        with _folder(root_fd, (*folder, RESERVED)) as fd, os.scandir(fd) as entries:
+            return {
+                entry.name
+                for entry in entries
+                if valid_name(entry.name) and not entry.name.startswith(".") and _is_file(entry)
+            }
+    except (ScanRefusedError, OSError):
         return set()
 
 

@@ -306,7 +306,8 @@ def _look(root_fd: int, config: _Config) -> tuple[list[_Sighting], list[dict[str
         nonlocal over
         found = scan_files.list_candidates(root_fd, folder, limit=CANDIDATES_PER_FOLDER + 1)
         if len(found) > CANDIDATES_PER_FOLDER:
-            over += len(scan_files.list_candidates(root_fd, folder)) - CANDIDATES_PER_FOLDER
+            # Names only: counting what is left out must not cost a `stat` per file.
+            over += max(scan_files.count_candidates(root_fd, folder) - CANDIDATES_PER_FOLDER, 1)
         return found[:CANDIDATES_PER_FOLDER]
 
     sightings = [

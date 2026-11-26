@@ -256,6 +256,28 @@ def test_subfolders_are_directories_only(root_fd: int, scan_root: Path) -> None:
     assert list_subfolders(root_fd, ("kantoor",)) == ["Anne", "mislukt"]
 
 
+def test_a_flooded_folder_is_counted_and_listed_without_a_stat_per_file(
+    root_fd: int, scan_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review of PR #64 (M4): counting what is left out costs one listing.
+    folder = scan_root / "kantoor"
+    (folder / "Map").mkdir(parents=True)
+    (folder / "mislukt").mkdir()
+    for number in range(30):
+        write(folder / f"x{number}.pdf", b"")
+        write(folder / "mislukt" / f"x{number}.pdf", b"")
+    (folder / "link.pdf").symlink_to(folder / "x0.pdf")
+
+    def no_stat(*args: object, **kwargs: object) -> os.stat_result:
+        raise AssertionError("stat")
+
+    monkeypatch.setattr(scan_files.os, "stat", no_stat)
+    monkeypatch.setattr(scan_files.os, "lstat", no_stat)
+    assert scan_files.count_candidates(root_fd, ("kantoor",)) == 31
+    assert list_subfolders(root_fd, ("kantoor",)) == ["Map", "mislukt"]
+    assert len(scan_files.list_failed(root_fd, ("kantoor",))) == 30
+
+
 def test_reading_gives_the_bytes(root_fd: int, scan_root: Path) -> None:
     print_ = write(scan_root / "kantoor" / "brief.pdf", b"%PDF-1.4 inhoud")
     data = read_candidate(root_fd, ("kantoor", "brief.pdf"), print_, max_bytes=MAX)
