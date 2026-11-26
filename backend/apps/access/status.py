@@ -1,10 +1,10 @@
 """What the settings page "Van buiten bereikbaar" shows (S 8).
 
 Read from the settings (compose decides, the page only shows), from the admin's own
-request and from what the server saw on the way in (apps.access.observed). Never a token
-or secret: the api does not have the tunnel token, only whether one is set. The api makes
-no outgoing call: it shares no network with cloudflared (security review of PR #53), so
-"connected" means a request came through the tunnel listener in the last seven days.
+request and from what the server saw on the way in (apps.access.observed).
+Never a token or secret. Brievie runs no tunnel (remote access is the user's own tool): the
+page only shows the hooks (names, trusted proxies, public web) and what the server saw on
+the way in. The api makes no outgoing call.
 """
 
 import ipaddress
@@ -21,16 +21,14 @@ from django.http import HttpRequest
 from apps.access import observed
 from apps.access.route import is_public_route, peer_ip
 from apps.accounts.models import SecondFactor, User
-from apps.common.checks import CLOUDFLARE_MAX_BODY_BYTES
 from apps.common.net import client_ip
 from apps.devices.models import Device
 
-EXTERNAL_ACCESS_DOCS_URL = "https://brievie.com/docs/installeren#van-buiten"
+EXTERNAL_ACCESS_DOCS_URL = "https://brievie.com/nl/install/#publieke-toegang"
 # The first app version that trusts each address the way it is served (iOS I1-I3). None
 # until that release is cut: until then every paired app needs the update.
 FIRST_APP_WITH_PUBLIC_ADDRESSES: tuple[int, ...] | None = None
 
-Connected = Literal["yes", "no", "not_set"]
 Level = Literal["ok", "warning", "problem"]
 Kind = Literal["home", "vpn", "public"]
 Certificate = Literal["private_ca", "public"]
@@ -41,8 +39,6 @@ CHECK_LEVELS: dict[str, Level] = {
     "hostname_mdns_over_vpn": "warning",
     "public_hostname_missing": "problem",
     "public_url_overridden_without_public_host": "problem",
-    "tunnel_not_seen": "warning",
-    "upload_limit_above_cloudflare": "warning",
     # Red only when the web is on outside and its second step is somehow not required.
     "public_web_without_second_factor": "problem",
     "public_web_second_factor_required": "ok",
@@ -51,10 +47,8 @@ CHECK_LEVELS: dict[str, Level] = {
     "request_not_secure": "problem",
     "public_host_not_forwarded": "problem",
     "trusted_proxy_without_forwarding": "problem",
-    "cloudflare_reads_along": "warning",
     "app_update_needed": "warning",
     "public_name_from_untrusted_source": "problem",
-    "cloudflare_on_https_port": "problem",
     "unknown_proxy": "problem",
 }
 CHECK_CODES: tuple[str, ...] = tuple(CHECK_LEVELS)
@@ -88,8 +82,6 @@ class ExternalAccess:
     public_hostname: str
     addresses: list[Address]
     public_web: bool
-    tunnel_token_set: bool
-    tunnel_connected: Connected
     trusted_proxies: list[str]
     second_factor_available: bool
     seen_as: SeenAs
@@ -185,14 +177,11 @@ def external_access_status(
     hostname: str = settings.BRIEVIE_HOSTNAME
     public_hostname: str = settings.BRIEVIE_PUBLIC_HOSTNAME
     proxies: list[str] = list(settings.BRIEVIE_TRUSTED_PROXIES)
-    token_set: bool = settings.BRIEVIE_TUNNEL_TOKEN_SET
     public_web: bool = settings.BRIEVIE_PUBLIC_WEB
     second_factor: bool = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE
-    public_way = token_set or bool(proxies)
+    # A public name alone is a way: your own tunnel needs no trusted proxy to be public.
+    public_way = bool(proxies) or bool(public_hostname)
 
-    connected: Connected = "not_set"
-    if token_set:
-        connected = "yes" if seen("tunnel") is not None else "no"
     public = is_public_route(request)
     seen_as = SeenAs(
         route="public" if public else "private",
@@ -210,10 +199,6 @@ def external_access_status(
         codes.append("public_hostname_missing")
     if public_hostname and not settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS:
         codes.append("public_url_overridden_without_public_host")
-    if connected == "no":
-        codes.append("tunnel_not_seen")
-    if token_set and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
-        codes.append("upload_limit_above_cloudflare")
     # Without Caddy no request counts as public (apps.access.route), so the second step is
     # not asked outside either: say so rather than claim it always is (security review of
     # PR #56, point 6).
@@ -249,18 +234,13 @@ def external_access_status(
     if own_request or seen("proxy_without_forwarding") is not None:
         codes.append("trusted_proxy_without_forwarding")
     # Seen on the way in (apps.access.observed): the public name from a source that is not
-    # your proxy (it was served as public, app-only, the direct peer counted), and
-    # Cloudflare's headers on the https port (a tunnel pointed at :443).
+    # your proxy (it was served as public, app-only, the direct peer counted).
     if seen("public_name_untrusted") is not None:
         codes.append("public_name_from_untrusted_source")
-    if seen("cloudflare_on_https_port") is not None:
-        codes.append("cloudflare_on_https_port")
     # A proxy's headers from a source that is not trusted: served as public, but a proxy that
     # rewrites Host and sends none of them would not be seen (SELFHOST: trust it first).
     if seen("unknown_proxy") is not None:
         codes.append("unknown_proxy")
-    if token_set:
-        codes.append("cloudflare_reads_along")
     if public_way and needs_app_update(app_versions()):
         codes.append("app_update_needed")
 
@@ -270,8 +250,6 @@ def external_access_status(
         public_hostname=public_hostname,
         addresses=_addresses(),
         public_web=public_web,
-        tunnel_token_set=token_set,
-        tunnel_connected=connected,
         trusted_proxies=proxies,
         second_factor_available=second_factor,
         seen_as=seen_as,

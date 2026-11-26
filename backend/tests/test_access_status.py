@@ -47,7 +47,6 @@ def home(settings: Settings) -> Settings:
     settings.BRIEVIE_PUBLIC_URLS = ["https://192.168.1.20:443"]
     settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS = []
     settings.ALLOWED_HOSTS = ["192.168.1.20", "brievie.example.nl", "nas.ts.net", "brievie.local"]
-    settings.BRIEVIE_TUNNEL_TOKEN_SET = False
     settings.BRIEVIE_TRUSTED_PROXIES = []
     settings.BRIEVIE_PUBLIC_WEB = False
     settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = False
@@ -95,14 +94,9 @@ def request(
 def codes(
     made: HttpRequest | None = None,
     *,
-    tunnel_seen: bool = True,
     versions: list[str] | None = None,
     admin_without_factor: bool = False,
 ) -> list[str]:
-    if tunnel_seen:
-        SEEN.setdefault("tunnel", datetime.now(UTC))
-    else:
-        SEEN.pop("tunnel", None)
     found = external_access_status(
         made or request(),
         app_versions=lambda: versions or [],
@@ -134,47 +128,33 @@ def test_check_public_hostname_missing_with_trusted_proxies(home: Settings) -> N
     assert "public_hostname_missing" not in codes()
 
 
-def test_check_public_hostname_missing_with_a_tunnel(home: Settings) -> None:
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    assert "public_hostname_missing" in codes()
-
-
 def test_check_public_url_overridden_without_public_host(home: Settings) -> None:
     home.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
     home.BRIEVIE_PUBLIC_CERTIFICATE_URLS = []
     assert "public_url_overridden_without_public_host" in codes()
 
 
-def test_check_tunnel_not_seen_when_token_set_and_no_request_came_through(home: Settings) -> None:
-    with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    assert "tunnel_not_seen" in codes(tunnel_seen=False)
-    assert "tunnel_not_seen" not in codes(tunnel_seen=True)
-
-
-def test_without_a_token_the_tunnel_is_not_set() -> None:
-    found = external_access_status(request(), app_versions=list)
-    assert found.tunnel_connected == "not_set"
-
-
 def test_the_api_makes_no_outgoing_call() -> None:
     source = (Path(__file__).resolve().parents[1] / "apps" / "access" / "status.py").read_text()
-    for needle in ("urllib.request", "http.client", "socket", "requests", "cloudflared:2000"):
+    for needle in ("urllib.request", "http.client", "socket", "requests", "cloudflared"):
         assert needle not in source, needle
 
 
-def test_check_upload_limit_above_cloudflare(home: Settings) -> None:
+def test_a_public_name_alone_is_a_public_way(home: Settings) -> None:
+    # Your own tunnel needs no trusted proxy: the second-step lines show with the name only.
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    home.BRIEVIE_MAX_UPLOAD_BYTES = 100_000_001
-    assert "upload_limit_above_cloudflare" in codes()
-    home.BRIEVIE_TUNNEL_TOKEN_SET = False
-    assert "upload_limit_above_cloudflare" not in codes()
+    home.BRIEVIE_PUBLIC_WEB = True
+    home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
+    found = codes(admin_without_factor=True)
+    assert "public_web_second_factor_required" in found
+    assert "public_web_admin_without_second_factor" in found
+    home.BRIEVIE_PUBLIC_WEB = False
+    assert "public_web_off" in codes()
 
 
 def test_check_public_web_without_second_factor_and_public_web_off(home: Settings) -> None:
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     assert "public_web_off" in codes()
     assert "public_web_without_second_factor" not in codes()
     home.BRIEVIE_PUBLIC_WEB = True
@@ -187,7 +167,7 @@ def test_check_public_web_without_second_factor_and_public_web_off(home: Setting
 def test_with_the_second_step_required_outside_the_page_says_so(home: Settings) -> None:
     # Task 13 of the two-step plan: the flag is true, so the red line is gone.
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     home.BRIEVIE_PUBLIC_WEB = True
     home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
 
@@ -207,7 +187,7 @@ def test_with_the_second_step_required_outside_the_page_says_so(home: Settings) 
 def test_without_caddy_the_page_does_not_claim_the_second_step_outside(home: Settings) -> None:
     # Without Caddy no request is on the public route, so nothing asks the second step there.
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     home.BRIEVIE_PUBLIC_WEB = True
     home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
     home.BRIEVIE_BEHIND_CADDY = False
@@ -243,16 +223,9 @@ def test_check_trusted_proxy_without_forwarding(home: Settings) -> None:
     assert "trusted_proxy_without_forwarding" not in codes(forwarded)
 
 
-def test_check_cloudflare_reads_along_always_with_the_tunnel(home: Settings) -> None:
-    assert "cloudflare_reads_along" not in codes()
-    with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    assert "cloudflare_reads_along" in codes()
-
-
 def test_check_app_update_needed_lists_no_device_names(home: Settings) -> None:
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     found = external_access_status(request(), app_versions=lambda: ["1.0.0"])
     assert "app_update_needed" in [c.code for c in found.checks]
     assert "iPhone" not in json.dumps(asdict(found))
@@ -272,14 +245,16 @@ def test_every_check_code_is_in_the_closed_list() -> None:
     assert len(CHECK_CODES) == len(set(CHECK_CODES))
 
 
-def test_status_never_contains_the_token(home: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_status_never_contains_a_token_and_knows_no_tunnel(
+    home: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BRIEVIE_TUNNEL_TOKEN", TOKEN_LIKE)
     monkeypatch.setenv("TUNNEL_TOKEN", TOKEN_LIKE)
     with_public(home)
-    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     found = external_access_status(request(), app_versions=list)
     assert TOKEN_LIKE not in json.dumps(asdict(found))
-    assert found.tunnel_token_set is True
+    assert not hasattr(found, "tunnel_token_set")
 
 
 def test_seen_as_reports_route_client_and_peer() -> None:
@@ -308,7 +283,7 @@ def test_addresses_carry_their_kind_and_certificate(home: Settings) -> None:
         ("vpn", "private_ca"),
         ("public", "public"),
     ]
-    assert found.docs_url == "https://brievie.com/docs/installeren#van-buiten"
+    assert found.docs_url == "https://brievie.com/nl/install/#publieke-toegang"
 
 
 def test_check_public_name_from_untrusted_source_names_the_local_peer(home: Settings) -> None:
@@ -319,12 +294,6 @@ def test_check_public_name_from_untrusted_source_names_the_local_peer(home: Sett
     found = external_access_status(request(), app_versions=list)
     assert "public_name_from_untrusted_source" in [c.code for c in found.checks]
     assert found.untrusted_public_name_peer == "192.168.1.5"
-
-
-def test_check_cloudflare_on_https_port(home: Settings) -> None:
-    assert "cloudflare_on_https_port" not in codes()
-    SEEN["cloudflare_on_https_port"] = datetime.now(UTC)
-    assert "cloudflare_on_https_port" in codes()
 
 
 def test_the_proxy_checks_come_from_what_was_seen_with_the_page_opened_at_home(

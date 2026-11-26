@@ -41,17 +41,17 @@ def test_get_external_access_no_store_and_shape(
     monkeypatch.setenv("BRIEVIE_TUNNEL_TOKEN", TOKEN_LIKE)
     settings.BRIEVIE_HOSTNAME = "192.168.1.20"
     settings.BRIEVIE_PUBLIC_URLS = ["https://192.168.1.20:443"]
-    settings.BRIEVIE_TUNNEL_TOKEN_SET = False
     admin = UserFactory.create(is_server_admin=True)
     response = as_user(admin).get(PATH)
     assert response.status_code == 200
     assert response["Cache-Control"] == "no-store"
     body = response.json()
+    # Kept for older clients: Brievie runs no tunnel any more.
     assert body["tunnel"] == {"token_set": False, "connected": "not_set"}
     assert body["addresses"] == [
         {"url": "https://192.168.1.20:443", "kind": "home", "certificate": "private_ca"}
     ]
-    assert body["docs_url"] == "https://brievie.com/docs/installeren#van-buiten"
+    assert body["docs_url"] == "https://brievie.com/nl/install/#publieke-toegang"
     assert body["second_factor_available"] is True
     assert TOKEN_LIKE not in response.content.decode()
 
@@ -66,7 +66,7 @@ def test_the_page_names_a_server_admin_without_a_second_factor(
     settings.BRIEVIE_HOSTNAME = "192.168.1.20"
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
     settings.BRIEVIE_PUBLIC_URLS = ["https://192.168.1.20:443", "https://brievie.example.nl"]
-    settings.BRIEVIE_TUNNEL_TOKEN_SET = True
+    settings.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     settings.BRIEVIE_PUBLIC_WEB = True
     admin = UserFactory.create(is_server_admin=True)
     client = signed_in_with_code(admin, give_factor(admin))

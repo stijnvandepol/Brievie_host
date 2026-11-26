@@ -5,6 +5,26 @@ Alle veranderingen in Brievie (de server) die je als beheerder merkt. De vorm vo
 [Semantic Versioning](https://semver.org/lang/nl/). Elke versie heeft een tag `vX.Y.Z`.
 Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
+## [Onuitgebracht]
+
+### Voor je bijwerkt
+
+- **Brievie start geen tunnel meer.** Van buiten bereikbaar is nu je eigen keuze, buiten
+  Brievie: een VPN (Tailscale), een eigen Cloudflare Tunnel (een eigen `cloudflared`-container)
+  of je eigen reverse proxy. `BRIEVIE_TUNNEL_TOKEN`, `BRIEVIE_TUNNEL_TOKEN_FILE` en
+  `COMPOSE_PROFILES=tunnel` doen niets meer. Staat een van de eerste twee nog in `deploy/.env`,
+  dan zegt `./brievie start` dat in het Nederlands en start Brievie gewoon door; er wordt niets
+  geweigerd en thuis blijft alles werken. Zet je eigen tunnel op (docs/SELFHOST.md, onderdeel 25),
+  laat hem doorsturen naar de https-poort van de server, zet `BRIEVIE_PUBLIC_HOSTNAME` op zijn
+  publieke naam en haal de tunnelregels uit `deploy/.env`.
+- Verzoeken voor `BRIEVIE_PUBLIC_HOSTNAME` blijven publiek: alleen de app, de webinterface dicht
+  tenzij `BRIEVIE_PUBLIC_WEB=true` (dan met tweestapsverificatie), koppelen alleen thuis.
+
+### Gewijzigd
+
+- De pagina Van buiten bereikbaar toont alleen nog wat is ingesteld (namen, vertrouwde adressen,
+  webinterface aan of uit) en verwijst naar de uitleg op brievie.com.
+
 ## [0.5.0] - 2026-11-25
 
 Mensen op één plek, een nieuw menu met Mijn post, een status voor elke brief,

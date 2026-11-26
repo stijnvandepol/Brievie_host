@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # The assertions of the CI jobs `stack` and `compose-stack` about the ways in ("Van buiten
-# bereikbaar", docs/SELFHOST.md section 25). No real tunnel: the tunnel listener :8080 is
-# reached from inside the compose network, as cloudflared reaches it.
+# bereikbaar", docs/SELFHOST.md section 25). Brievie runs no tunnel: a user's own cloudflared
+# (or Tailscale, or reverse proxy) is simulated by what it sends to Caddy's https port, a
+# request for the public name with an X-Forwarded-For from an address that is not in
+# BRIEVIE_TRUSTED_PROXIES.
 #
-#   routes-check.sh caddy        the adapted Caddyfile: who reads CF-Connecting-IP, edge headers
-#   routes-check.sh listeners    HSTS per route, the tunnel's redirect and Host, 413s, forged
-#                                route headers, the VPN name, a request without SNI
-#   routes-check.sh session JAR  a signed-in server admin's view (getExternalAccess) on :443
-#                                with forged address headers, and on :8080 (closed unless
-#                                BRIEVIE_PUBLIC_WEB; then a session started at home without
-#                                the second step counts as none (and only because of that
-#                                step), a password sign-in gets the outside sentence, and the
-#                                visitor's address is CF-Connecting-IP)
-#   routes-check.sh isolation   the tunnel network reaches Caddy only; a request that reaches
-#                                the api without Caddy counts as public with its own address
-#   routes-check.sh token NAME   no value of the file NAME (a planted tunnel token) in any
-#                                container but cloudflared, `compose config`, a log or a process
+#   routes-check.sh caddy        the adapted Caddyfile: one listener, nobody reads CF-Connecting-IP
+#   routes-check.sh listeners    HSTS per route, the public name as a user's own cloudflared sends
+#                                it, 413s, forged route headers, the VPN name, a request without SNI
+#   routes-check.sh session JAR  a signed-in server admin's view (getExternalAccess) at home with
+#                                forged address headers, and for the public name (closed unless
+#                                BRIEVIE_PUBLIC_WEB; then a session started at home without the
+#                                second step counts as none (and only because of that step), a
+#                                password sign-in gets the outside sentence, and a forwarded
+#                                address from an untrusted peer changes nothing)
+#   routes-check.sh oldenv       Caddy with only the 0.5.0 variable: the public name is still public
+#   routes-check.sh isolation    a request that reaches the api without Caddy counts as public
 #
 # Needs COMPOSE, PUBLIC_HOST (the public name the stack serves), VPN_HOST and RUNNER_TEMP.
 set -euo pipefail
@@ -27,28 +27,6 @@ trap 'rm -rf "${work:?}"' EXIT
 # Which check failed: the line, never a value.
 set -E
 trap 'echo "routes-check.sh: a check failed at line $LINENO." >&2' ERR
-
-# One HTTP request from inside the api container to Caddy (the compose network).
-# Prints "<status>\n<headers as JSON>\n<body>".
-inside() { # $1 method, $2 host:port, $3 path, $4 JSON of headers, $5 body size (bytes), [$6 body]
-	$COMPOSE exec -T api python - "$@" <<'PY'
-import http.client, json, sys
-method, target, path, headers, size = sys.argv[1:6]
-host, port = target.split(":")
-conn = http.client.HTTPConnection(host, int(port), timeout=10)
-body = b"x" * int(size) if int(size) else None
-if len(sys.argv) > 6:
-    body = sys.argv[6].encode()
-try:
-    conn.request(method, path, body=body, headers=json.loads(headers))
-except (BrokenPipeError, ConnectionResetError):
-    pass  # Caddy answered 413 before the whole body was sent; its answer is still read.
-resp = conn.getresponse()
-print(resp.status)
-print(json.dumps({k.lower(): v for k, v in resp.getheaders()}))
-print(resp.read().decode("utf-8", "replace"))
-PY
-}
 
 # Whether the session with key $1 counts as having passed the second step ($2: True|False),
 # straight in the database from inside the api container. Fails unless one row changed.
@@ -64,9 +42,24 @@ assert UserSession.objects.filter(session_key=key).update(second_factor=passed) 
 PY
 }
 
+# A request as a user's own cloudflared sends it: the https port, Host = the public name.
+outside() {
+	curl --silent --insecure --resolve "$PUBLIC_HOST:443:127.0.0.1" "$@"
+}
+
 header_of() { sed -n 2p "$1" | python3 -c "import json,sys; print(json.load(sys.stdin).get('$2', ''))"; }
 status_of() { sed -n 1p "$1"; }
 body_of() { sed -n '3,$p' "$1"; }
+
+# Caddy was recreated with only the 0.5.0 compose file's variable (BRIEVIE_TUNNEL_HOST): a request
+# for the public name with no proxy header at all must still be the public route, which
+# pairing tells (403 pair_at_home).
+check_oldenv() {
+	answer=$(outside --retry 10 --retry-delay 2 --retry-all-errors --request POST \
+		--header 'Content-Type: application/json' "https://$PUBLIC_HOST/api/v1/devices/pairing-challenges")
+	test "$(jq -r .code <<<"$answer")" = pair_at_home
+	echo "Old compose variable: the public name is still the public route."
+}
 
 check_caddy() {
 	$COMPOSE exec -T caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >"$work/caddy.json"
@@ -74,15 +67,11 @@ check_caddy() {
 import json, sys
 config = json.load(open(sys.argv[1]))
 servers = config["apps"]["http"]["servers"]
-tunnel = [s for s in servers.values() if s.get("listen") == [":8080"]]
-assert len(tunnel) == 1, "one server on :8080"
+assert len(servers) == 1, "one server"
 for name, server in servers.items():
-    headers = server.get("client_ip_headers")
-    if server.get("listen") == [":8080"]:
-        assert headers == ["CF-Connecting-IP"], (name, headers)
-        assert server["trusted_proxies"]["ranges"], name
-    else:
-        assert headers is None, (name, headers)
+    assert server.get("listen") == [":443"], (name, server.get("listen"))
+    assert server.get("client_ip_headers") is None, (name, server.get("client_ip_headers"))
+    assert server["trusted_proxies"]["ranges"], name
 proxies = []
 def walk(node):
     if isinstance(node, dict):
@@ -101,7 +90,7 @@ for proxy in proxies:
     for header in ("X-Brievie-Route", "X-Brievie-Client-IP", "X-Brievie-Peer-IP", "Host"):
         assert header.lower() in up, (header, up)
     assert up["x-brievie-client-ip"] == ["{http.vars.client_ip}"], up
-print(f"Caddy: {len(proxies)} proxies set the edge headers; only :8080 reads CF-Connecting-IP.")
+print(f"Caddy: {len(proxies)} proxies set the edge headers; one listener; no CF-Connecting-IP.")
 PY
 }
 
@@ -110,37 +99,33 @@ check_listeners() {
 	curl --silent --show-error --insecure --dump-header "$work/home.h" --output /dev/null \
 		https://localhost/api/v1/health
 	grep -qi '^strict-transport-security: max-age=0' "$work/home.h"
-	# The tunnel listener: 200 with one year of HSTS and the public name as Host.
-	inside GET caddy:8080 /api/v1/health '{"X-Forwarded-Proto": "https"}' 0 >"$work/t"
-	test "$(status_of "$work/t")" = 200
-	test "$(header_of "$work/t" strict-transport-security)" = "max-age=31536000"
-	# Cloudflare got it over plain http: 308 to https on the public name.
-	inside GET caddy:8080 /api/v1/health '{"X-Forwarded-Proto": "http"}' 0 >"$work/t"
-	test "$(status_of "$work/t")" = 308
-	test "$(header_of "$work/t" location)" = "https://$PUBLIC_HOST/api/v1/health"
-	# A body over the limit: 413 in the API's shape, with the route's HSTS.
-	inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 3000000 >"$work/t"
-	test "$(status_of "$work/t")" = 413
-	test "$(header_of "$work/t" strict-transport-security)" = "max-age=31536000"
+	# A user's own cloudflared: the https port, Host = the public name, X-Forwarded-For from an
+	# address that is not in BRIEVIE_TRUSTED_PROXIES. It is the public route and the app's own
+	# paths answer.
+	code=$(outside --output /dev/null --write-out '%{http_code}' \
+		--header 'X-Forwarded-For: 198.51.100.1' "https://$PUBLIC_HOST/api/v1/health")
+	test "$code" = 200
 	head -c 3000000 /dev/zero | tr '\0' x >"$work/big"
 	code=$(curl --silent --insecure --dump-header "$work/big.h" --output /dev/null --write-out '%{http_code}' \
 		--header 'Content-Type: application/json' --data-binary @"$work/big" https://localhost/api/v1/auth/login)
 	test "$code" = 413
 	grep -qi '^strict-transport-security: max-age=0' "$work/big.h"
-	# A forged route header changes nothing: on :8080 "private" is overwritten to public, so a
-	# session-only operation is closed; on :443 "public" is overwritten to private, so it is
-	# only unauthenticated.
-	inside GET caddy:8080 /api/v1/server/audit-events '{"X-Forwarded-Proto": "https", "X-Brievie-Route": "private"}' 0 >"$work/t"
+	# A forged route header changes nothing: for the public name "private" is overwritten to
+	# public, so a session-only operation is closed; on :443 at home "public" is overwritten to
+	# private, so it is only unauthenticated.
+	forged=$(outside --header 'X-Brievie-Route: private' --header 'X-Forwarded-For: 198.51.100.1' \
+		"https://$PUBLIC_HOST/api/v1/server/audit-events")
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
 		# The web is open on the public address: the operation's own auth answers.
-		test "$(status_of "$work/t")" = 401
-		test "$(body_of "$work/t" | jq -r .code)" = not_authenticated
+		test "$(jq -r .code <<<"$forged")" = not_authenticated
 	else
-		test "$(status_of "$work/t")" = 403
-		test "$(body_of "$work/t" | jq -r .code)" = public_web_off
+		test "$(jq -r .code <<<"$forged")" = public_web_off
 		# A junk Bearer header opens nothing either.
-		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "X-Brievie-Route": "private", "Authorization": "Bearer junk", "Content-Type": "application/json"}' 0 >"$work/t"
-		test "$(status_of "$work/t")" = 403
+		code=$(outside --output /dev/null --write-out '%{http_code}' --request POST \
+			--header 'Authorization: Bearer junk' --header 'X-Brievie-Route: private' \
+			--header 'X-Forwarded-For: 198.51.100.1' --header 'Content-Type: application/json' \
+			"https://$PUBLIC_HOST/api/v1/auth/login")
+		test "$code" = 403
 	fi
 	body=$(curl --silent --insecure --header 'X-Brievie-Route: public' \
 		https://localhost/api/v1/server/audit-events)
@@ -175,19 +160,27 @@ check_listeners() {
 			exit 1
 		}
 	done
-	# Pairing and the server's addresses never go through the party that ends TLS.
-	inside POST caddy:8080 /api/v1/devices/pairing-challenges '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 >"$work/t"
-	test "$(status_of "$work/t")" = 403
-	test "$(body_of "$work/t" | jq -r .code)" = pair_at_home
-	# The app's own paths stay open on the tunnel.
-	inside GET caddy:8080 /api/v1/server/ca-certificate '{"X-Forwarded-Proto": "https"}' 0 >"$work/t"
-	test "$(status_of "$work/t")" = 200
+	# Pairing and the server's addresses never go through the public name (pair_at_home), and
+	# the app's own paths stay open there.
+	answer=$(outside --request POST --header 'Content-Type: application/json' \
+		--header 'X-Forwarded-For: 198.51.100.1' "https://$PUBLIC_HOST/api/v1/devices/pairing-challenges")
+	test "$(jq -r .code <<<"$answer")" = pair_at_home
+	code=$(outside --output /dev/null --write-out '%{http_code}' \
+		--header 'X-Forwarded-For: 198.51.100.1' "https://$PUBLIC_HOST/api/v1/server/ca-certificate")
+	test "$code" = 200
+	# An unknown Host is served by no site: it never reaches the api.
+	other=$(curl --silent --insecure --resolve "unknown.example.test:443:127.0.0.1" \
+		https://unknown.example.test/api/v1/health || true)
+	if grep -q server_version <<<"$other"; then
+		echo "An unknown Host reached the api." >&2
+		exit 1
+	fi
 	# The VPN name is served by the private CA, and a call without SNI gets a certificate.
 	curl --fail --silent --show-error --insecure --resolve "$VPN_HOST:443:127.0.0.1" \
 		"https://$VPN_HOST/api/v1/health" >/dev/null
 	curl --fail --silent --show-error --insecure --header 'Host: localhost' \
 		https://127.0.0.1/api/v1/health >/dev/null
-	echo "Listeners: HSTS per route, the tunnel's redirect, 413s, forged routes, VPN name and no SNI."
+	echo "Listeners: HSTS per route, a user's own cloudflared, 413s, forged routes, VPN name and no SNI."
 }
 
 check_session() {
@@ -200,7 +193,7 @@ check_session() {
 	# (A proxy's header such as X-Forwarded-For makes it public: checked below and in listeners.)
 	curl --silent --show-error --insecure --cookie "sessionid=$session" \
 		--header 'X-Brievie-Client-IP: 198.51.100.3' --header 'X-Brievie-Route: public' \
-		--header 'X-Brievie-Peer-IP: 198.51.100.4' --header 'X-Brievie-Via: tunnel' \
+		--header 'X-Brievie-Peer-IP: 198.51.100.4' --header 'X-Brievie-Via: proxy' \
 		https://localhost/api/v1/server/external-access >"$work/home.json"
 	python3 - "$work/home.json" <<'PY'
 import json, sys
@@ -211,10 +204,10 @@ assert seen["client_ip"] == seen["peer_ip"], seen
 assert not seen["client_ip"].startswith("198.51.100."), seen
 print("Home route: forged address headers change nothing:", seen["route"], "https")
 codes = [c["code"] for c in json.load(open(sys.argv[1]))["checks"]]
-# Seen by the listeners check before: the public name from an untrusted source, Cloudflare
-# on the https port.
+# Seen by the listeners check before: the public name from an untrusted source (a user's own
+# cloudflared that is not in BRIEVIE_TRUSTED_PROXIES yet).
 assert "public_name_from_untrusted_source" in codes, codes
-assert "cloudflare_on_https_port" in codes, codes
+assert "cloudflare_on_https_port" not in codes, codes
 assert "unknown_proxy" in codes, codes
 print("The page shows what the server saw:", codes)
 PY
@@ -233,97 +226,66 @@ PY
 		test "$code" = 403
 		test "$(jq -r .code "$work/cf.json")" = public_web_off
 	fi
-	cookie_header=$(jq -cn --arg s "$session" '{"X-Forwarded-Proto": "https", "Cookie": ("sessionid=" + $s), "CF-Connecting-IP": "203.0.113.77", "X-Brievie-Client-IP": "198.51.100.3", "X-Brievie-Route": "private", "X-Forwarded-For": "198.51.100.1"}')
-	inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
+	# The same session for the public name, as a user's own cloudflared forwards it: the https
+	# port, Host = the public name, an X-Forwarded-For from an untrusted peer.
+	forward=(--header 'X-Forwarded-For: 198.51.100.1' --header 'X-Brievie-Client-IP: 198.51.100.3'
+		--header 'X-Brievie-Route: private')
+	code=$(outside --cookie "sessionid=$session" --output "$work/pub.json" --write-out '%{http_code}' \
+		"${forward[@]}" "https://$PUBLIC_HOST/api/v1/server/external-access")
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
 		# The web is on outside, but the home session without the second step does not count.
-		test "$(status_of "$work/t")" = 401
-		test "$(body_of "$work/t" | jq -r .code)" = not_authenticated
+		test "$code" = 401
+		test "$(jq -r .code "$work/pub.json")" = not_authenticated
 		# The cookie did arrive: the same request for the same session, marked as having
 		# passed the second step, is let in. So the 401 above is the session refused.
 		mark_passed "$session" True
-		inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
+		code=$(outside --cookie "sessionid=$session" --output "$work/pub.json" --write-out '%{http_code}' \
+			"${forward[@]}" "https://$PUBLIC_HOST/api/v1/server/external-access")
 		mark_passed "$session" False
-		test "$(status_of "$work/t")" = 200
-		test "$(body_of "$work/t" | jq -r .seen_as.route)" = public
-		# A password sign-in through the tunnel answers the outside sentence (an account
+		test "$code" = 200
+		test "$(jq -r .seen_as.route "$work/pub.json")" = public
+		# The forwarded address of an untrusted peer is not believed: the visitor is the peer.
+		python3 - "$work/pub.json" <<'PY'
+import json, sys
+seen = json.load(open(sys.argv[1]))["seen_as"]
+assert seen["client_ip"] == seen["peer_ip"], seen
+assert not seen["client_ip"].startswith("198.51.100."), seen
+PY
+		# A password sign-in for the public name answers the outside sentence (an account
 		# without a factor gets the same answer as a wrong password).
 		wrong=$(head -c 18 /dev/urandom | base64)
 		login=$(jq -cn --arg p "$wrong" '{email: "ci@example.invalid", password: $p}')
-		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 "$login" >"$work/t"
-		test "$(status_of "$work/t")" = 401
-		body_of "$work/t" | jq -e '.code == "invalid_credentials" and (.message | contains("tweestapsverificatie"))' >/dev/null
-		# The visitor's address through the tunnel is CF-Connecting-IP, never a forwarded
-		# header: six wrong passwords for one new address, from one CF-Connecting-IP and each
-		# with another X-Forwarded-For, lock that pair (axes, after 5); the per-account
-		# slow-down starts only after 10, so only the address makes the sixth a 429 ...
+		outside --request POST --header 'Content-Type: application/json' --data "$login" \
+			"https://$PUBLIC_HOST/api/v1/auth/login" >"$work/t"
+		jq -e '.code == "invalid_credentials" and (.message | contains("tweestapsverificatie"))' "$work/t" >/dev/null
+		# The visitor's address is the peer, never a forwarded header: six wrong passwords for
+		# one new address, each with another X-Forwarded-For, lock that peer (axes, after 5);
+		# the per-account slow-down starts only after 10, so only the address makes the sixth a 429.
 		email="ci-$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')@example.invalid"
 		login=$(jq -cn --arg e "$email" --arg p "$wrong" '{email: $e, password: $p}')
 		for attempt in 1 2 3 4 5 6; do
-			headers=$(jq -cn --arg f "198.51.100.$((20 + attempt))" '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.81", "X-Forwarded-For": $f}')
-			inside POST caddy:8080 /api/v1/auth/login "$headers" 0 "$login" >"$work/t"
+			code=$(outside --output /dev/null --write-out '%{http_code}' --request POST \
+				--header 'Content-Type: application/json' \
+				--header "X-Forwarded-For: 198.51.100.$((20 + attempt))" --data "$login" \
+				"https://$PUBLIC_HOST/api/v1/auth/login")
 			if [ "$attempt" -lt 6 ]; then
-				test "$(status_of "$work/t")" = 401
+				test "$code" = 401
 			else
-				test "$(status_of "$work/t")" = 429
+				test "$code" = 429
 			fi
 		done
-		# ... and another CF-Connecting-IP is another visitor: not locked.
-		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.82", "X-Forwarded-For": "198.51.100.21"}' 0 "$login" >"$work/t"
-		test "$(status_of "$work/t")" = 401
-		echo "Tunnel route: the visitor is CF-Connecting-IP; X-Forwarded-For changes nothing."
-		echo "Tunnel route: a session needs the second step, and so does a password sign-in."
+		echo "Public route: the visitor is the peer; X-Forwarded-For from an untrusted peer changes nothing."
+		echo "Public route: a session needs the second step, and so does a password sign-in."
 	else
-		test "$(status_of "$work/t")" = 403
-		test "$(body_of "$work/t" | jq -r .code)" = public_web_off
-		echo "Tunnel route: a web session is closed while BRIEVIE_PUBLIC_WEB is off."
+		test "$code" = 403
+		test "$(jq -r .code "$work/pub.json")" = public_web_off
+		echo "Public route: a web session is closed while BRIEVIE_PUBLIC_WEB is off."
 	fi
-}
-
-check_token() {
-	value_file=${1:?usage: routes-check.sh token FILE}
-	value=$(cat "$value_file")
-	echo "::add-mask::$value"
-	printf '%s\n' "$value" >"$work/values"
-	$COMPOSE --profile tunnel config >"$work/config.txt" 2>&1 || true
-	: >"$work/inspect.txt"
-	for id in $($COMPOSE --profile tunnel ps -aq); do
-		name=$(docker inspect "$id" --format '{{index .Config.Labels "com.docker.compose.service"}}')
-		docker inspect "$id" >"$work/inspect-$name.txt"
-	done
-	for service in $($COMPOSE --profile tunnel config --services); do
-		$COMPOSE --profile tunnel logs --no-color "$service" >"$work/logs-$service.txt" 2>&1 || true
-	done
-	: >"$work/processes.txt"
-	for id in $($COMPOSE --profile tunnel ps -q); do
-		docker top "$id" -eo args >>"$work/processes.txt" 2>/dev/null || true
-	done
-	for file in "$work"/config.txt "$work"/inspect-*.txt "$work"/logs-*.txt "$work"/processes.txt; do
-		case $(basename "$file") in
-		# cloudflared's own environment holds the plain variable when that form is used.
-		inspect-cloudflared.txt) [ "${TOKEN_AS_FILE:-}" = yes ] || continue ;;
-		config.txt) [ "${TOKEN_AS_FILE:-}" = yes ] || continue ;;
-		esac
-		if grep -qF -f "$work/values" "$file"; then
-			echo "The tunnel token is in $(basename "$file")." >&2
-			exit 1
-		fi
-	done
-	echo "The tunnel token is in no container but cloudflared, no log and no process list."
 }
 
 check_isolation() {
 	project=${COMPOSE_PROJECT:-brievie}
 	image=$(docker inspect "$($COMPOSE ps -q caddy)" --format '{{.Config.Image}}')
-	# A container on the tunnel network (where cloudflared lives) reaches caddy:8080 ...
-	docker run --rm --network "${project}_tunnel" --entrypoint wget "$image" \
-		-q -T 5 -O /dev/null http://caddy:8080/api/v1/health
-	# ... and never the api.
-	if docker run --rm --network "${project}_tunnel" --entrypoint wget "$image" \
-		-q -T 5 -O /dev/null http://api:8000/api/v1/health; then
-		echo "The tunnel network reaches the api." >&2
-		exit 1
-	fi
 	# A container that does reach the api directly (here the worker) cannot pose as Caddy.
 	$COMPOSE exec -T worker python - <<'PY' >"$work/bypass"
 import http.client, json
@@ -341,17 +303,17 @@ PY
 		test "$(sed -n 1p "$work/bypass")" = 403
 		test "$(sed -n 2p "$work/bypass")" = public_web_off
 	fi
-	echo "Isolation: the tunnel network reaches Caddy only; a request around Caddy is public."
+	echo "Isolation: a request around Caddy is public."
 }
 
 case ${1:-} in
 caddy) check_caddy ;;
 isolation) check_isolation ;;
+oldenv) check_oldenv ;;
 listeners) check_listeners ;;
 session) check_session "${2:-}" ;;
-token) check_token "${2:-}" ;;
 *)
-	echo "usage: routes-check.sh caddy|listeners|isolation|session JAR|token FILE" >&2
+	echo "usage: routes-check.sh caddy|listeners|isolation|oldenv|session JAR" >&2
 	exit 2
 	;;
 esac

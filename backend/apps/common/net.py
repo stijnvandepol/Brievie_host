@@ -76,7 +76,8 @@ def client_ip(request: HttpRequest) -> str | None:
     """
     # Behind Caddy (compose): the address Caddy wrote itself after its own trusted-proxy
     # rules (X-Brievie-Client-IP, S 7.3); a client's value never gets here. Never
-    # CF-Connecting-IP: only Caddy reads that, on its unpublished tunnel listener.
+    # CF-Connecting-IP: nobody reads it; your own tunnel's address goes in
+    # BRIEVIE_TRUSTED_PROXIES and its X-Forwarded-For is believed from there.
     remote_addr = request.META.get("REMOTE_ADDR")
     if settings.BRIEVIE_BEHIND_CADDY:
         if not from_caddy(request):

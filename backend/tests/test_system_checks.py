@@ -1,4 +1,3 @@
-import secrets
 from pathlib import Path
 
 import pytest
@@ -118,7 +117,6 @@ def test_any_password_containing_change_me_is_a_warning(
 def _external(
     settings: Settings,
     *,
-    tunnel: bool,
     proxies: list[str],
     public_web: bool,
     second_factor: bool = False,
@@ -126,30 +124,23 @@ def _external(
 ) -> None:
     # `second_factor` False: as if the second step were somehow not required outside (it is
     # since Task 13 of the two-step plan, so W002 is silent in a real install).
-    settings.BRIEVIE_TUNNEL_TOKEN_SET = tunnel
     settings.BRIEVIE_TRUSTED_PROXIES = proxies
     settings.BRIEVIE_PUBLIC_WEB = public_web
     settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = second_factor
     settings.BRIEVIE_BEHIND_CADDY = behind_caddy
     settings.BRIEVIE_MAX_UPLOAD_BYTES = 33554432
-    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl" if tunnel or proxies else ""
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl" if proxies else ""
 
 
-@pytest.mark.parametrize(("tunnel", "proxies"), [(True, []), (False, ["192.168.1.5/32"])])
-def test_w002_public_web_without_second_factor(
-    settings: Settings, tunnel: bool, proxies: list[str]
-) -> None:
-    _external(settings, tunnel=tunnel, proxies=proxies, public_web=True)
+def test_w002_public_web_without_second_factor(settings: Settings) -> None:
+    _external(settings, proxies=["192.168.1.5/32"], public_web=True)
     found = check_external_access(None)
     assert [m.id for m in found] == ["brievie.W002"]
     assert isinstance(found[0], Warning)
 
 
-@pytest.mark.parametrize(("tunnel", "proxies"), [(True, []), (False, ["192.168.1.5/32"])])
-def test_w002_silent_now_the_public_route_needs_the_second_step(
-    settings: Settings, tunnel: bool, proxies: list[str]
-) -> None:
-    _external(settings, tunnel=tunnel, proxies=proxies, public_web=True, second_factor=True)
+def test_w002_silent_now_the_public_route_needs_the_second_step(settings: Settings) -> None:
+    _external(settings, proxies=["192.168.1.5/32"], public_web=True, second_factor=True)
     assert check_external_access(None) == []
 
 
@@ -157,8 +148,7 @@ def test_w002_without_caddy_nothing_asks_the_second_step_outside(settings: Setti
     # Without Caddy no request counts as public (apps.access.route).
     _external(
         settings,
-        tunnel=True,
-        proxies=[],
+        proxies=["192.168.1.5/32"],
         public_web=True,
         second_factor=True,
         behind_caddy=False,
@@ -167,53 +157,37 @@ def test_w002_without_caddy_nothing_asks_the_second_step_outside(settings: Setti
 
 
 def test_w002_silent_when_public_web_off(settings: Settings) -> None:
-    _external(settings, tunnel=True, proxies=["192.168.1.5/32"], public_web=False)
+    _external(settings, proxies=["192.168.1.5/32"], public_web=False)
     assert check_external_access(None) == []
 
 
 def test_w002_silent_without_a_public_way(settings: Settings) -> None:
-    _external(settings, tunnel=False, proxies=[], public_web=True)
+    _external(settings, proxies=[], public_web=True)
     assert check_external_access(None) == []
 
 
-def test_w003_upload_limit_above_cloudflare_with_tunnel(settings: Settings) -> None:
-    _external(settings, tunnel=True, proxies=[], public_web=False)
-    settings.BRIEVIE_MAX_UPLOAD_BYTES = 100_000_001
-    assert [m.id for m in check_external_access(None)] == ["brievie.W003"]
-    settings.BRIEVIE_MAX_UPLOAD_BYTES = 100_000_000
-    assert check_external_access(None) == []
-
-
-def test_w003_silent_without_tunnel(settings: Settings) -> None:
-    _external(settings, tunnel=False, proxies=["192.168.1.5/32"], public_web=False)
+def test_there_is_no_cloudflare_upload_warning_any_more(settings: Settings) -> None:
+    # Brievie runs no tunnel; the old W003 is gone whatever the upload limit is.
+    _external(settings, proxies=["192.168.1.5/32"], public_web=False)
     settings.BRIEVIE_MAX_UPLOAD_BYTES = 200_000_000
     assert check_external_access(None) == []
+    assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN_SET")
 
 
-def test_warnings_never_print_the_token(
-    settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Made at run time: no token-like literal in the repository.
-    secret = secrets.token_urlsafe(32)
-    monkeypatch.setenv("BRIEVIE_TUNNEL_TOKEN", secret)
-    monkeypatch.setenv("TUNNEL_TOKEN", secret)
-    _external(settings, tunnel=True, proxies=[], public_web=True)
-    settings.BRIEVIE_MAX_UPLOAD_BYTES = 200_000_000
-    found = check_external_access(None)
-    assert {m.id for m in found} == {"brievie.W002", "brievie.W003"}
-    for message in found:
-        assert secret not in f"{message.msg} {message.hint}"
-    assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN")
-
-
-def test_w005_public_name_without_a_way(settings: Settings) -> None:
-    _external(settings, tunnel=False, proxies=[], public_web=False)
+def test_a_public_name_alone_is_a_public_way_for_w002(settings: Settings) -> None:
+    _external(settings, proxies=[], public_web=True)
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
-    assert [m.id for m in check_external_access(None)] == ["brievie.W005"]
+    ids = [m.id for m in check_external_access(None)]
+    assert "brievie.W002" in ids
+
+
+def test_w005_public_name_without_trusted_proxies(settings: Settings) -> None:
+    _external(settings, proxies=[], public_web=False)
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    found = check_external_access(None)
+    assert [m.id for m in found] == ["brievie.W005"]
+    assert "tunnel token" not in found[0].msg
     settings.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
-    assert check_external_access(None) == []
-    settings.BRIEVIE_TRUSTED_PROXIES = []
-    settings.BRIEVIE_TUNNEL_TOKEN_SET = True
     assert check_external_access(None) == []
 
 

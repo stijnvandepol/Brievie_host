@@ -70,18 +70,13 @@ def check_names(app_configs: Iterable[AppConfig] | None, **kwargs: object) -> li
     ]
 
 
-# Cloudflare's free plan accepts request bodies up to this size (S 7.5).
-CLOUDFLARE_MAX_BODY_BYTES = 100_000_000
-
-
 @register()
 def check_external_access(
     app_configs: Iterable[AppConfig] | None, **kwargs: object
 ) -> list[CheckMessage]:
     """Warnings, never a refusal: the home network must keep working whatever is set."""
     messages: list[CheckMessage] = []
-    tunnel: bool = settings.BRIEVIE_TUNNEL_TOKEN_SET
-    public_way = tunnel or bool(settings.BRIEVIE_TRUSTED_PROXIES)
+    public_way = bool(settings.BRIEVIE_TRUSTED_PROXIES) or bool(settings.BRIEVIE_PUBLIC_HOSTNAME)
     # Without Caddy no request counts as public (apps.access.route): nothing asks the second
     # step outside then.
     second_step_outside = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE and settings.BRIEVIE_BEHIND_CADDY
@@ -97,29 +92,17 @@ def check_external_access(
                 id="brievie.W002",
             )
         )
-    if settings.BRIEVIE_PUBLIC_HOSTNAME and not public_way:
+    if settings.BRIEVIE_PUBLIC_HOSTNAME and not settings.BRIEVIE_TRUSTED_PROXIES:
         messages.append(
             Warning(
-                "BRIEVIE_PUBLIC_HOSTNAME is set, but neither a tunnel token nor "
-                "BRIEVIE_TRUSTED_PROXIES: requests for that name are served app-only, every "
-                "visitor counted by the address of whatever forwards them.",
+                "BRIEVIE_PUBLIC_HOSTNAME is set, but not BRIEVIE_TRUSTED_PROXIES: requests for "
+                "that name are served app-only, every visitor counted by the address of "
+                "whatever forwards them.",
                 hint=_(
-                    "Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy, of stel de "
-                    "tunnel in. Het adres van je proxy staat thuis op de pagina Van buiten "
-                    "bereikbaar."
+                    "Zet BRIEVIE_TRUSTED_PROXIES op het adres van je tunnel of reverse proxy. "
+                    "Dat adres staat thuis op de pagina Van buiten bereikbaar."
                 ),
                 id="brievie.W005",
-            )
-        )
-    if tunnel and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
-        messages.append(
-            Warning(
-                "BRIEVIE_MAX_UPLOAD_BYTES is larger than Cloudflare accepts (100 MB).",
-                hint=_(
-                    "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op "
-                    "100000000 of minder."
-                ),
-                id="brievie.W003",
             )
         )
     return messages

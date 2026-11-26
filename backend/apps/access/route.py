@@ -15,7 +15,7 @@ PRIVATE = "private"
 
 
 def is_public_route(request: HttpRequest) -> bool:
-    """True for the tunnel and a trusted reverse proxy. Behind Caddy, anything but exactly
+    """True for your own tunnel and a trusted reverse proxy. Behind Caddy, anything but exactly
     `private` counts as public: a request that reached the api without Caddy's mark gets
     the closed way, never the open one."""
     if not settings.BRIEVIE_BEHIND_CADDY:
@@ -33,7 +33,7 @@ def peer_ip(request: HttpRequest) -> str:
 
 
 # The ways Caddy names in X-Brievie-Via (deploy/Caddyfile).
-VIAS = ("home", "public_name", "proxy", "cloudflare", "tunnel", "unknown_proxy")
+VIAS = ("home", "public_name", "proxy", "cloudflare", "unknown_proxy")
 
 
 def via(request: HttpRequest) -> str:

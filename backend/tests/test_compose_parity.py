@@ -119,24 +119,11 @@ def test_a_missing_service_is_drift() -> None:
     assert any("services differ" in p for p in drift(small_wrapper(), compose))
 
 
-def test_the_tunnel_service_must_be_the_same_in_both() -> None:
+def test_a_service_only_one_file_has_is_drift() -> None:
+    # Brievie ships no tunnel service any more: one that shows up in only one file is drift.
     wrapper, compose = copy.deepcopy(small_wrapper()), copy.deepcopy(small_compose())
-    tunnel = {
-        "image": "cloudflare/cloudflared:1@sha256:" + "0" * 64,
-        "environment": {"TUNNEL_TOKEN": ""},
-        "read_only": True,
-        "networks": {"tunnel": None},
-    }
-    wrapper["services"]["cloudflared"] = copy.deepcopy(tunnel)  # type: ignore[index]
-    compose["services"]["cloudflared"] = copy.deepcopy(tunnel)  # type: ignore[index]
-    assert drift(wrapper, compose) == []
-    compose["services"]["cloudflared"]["read_only"] = False  # type: ignore[index]
-    compose["services"]["cloudflared"]["environment"] = {"TUNNEL_TOKEN": "", "X": "1"}  # type: ignore[index]
-    compose["services"]["cloudflared"]["networks"] = {"edge": None}  # type: ignore[index]
-    found = drift(wrapper, compose)
-    assert "cloudflared: networks differs" in found
-    assert "cloudflared: read_only differs" in found
-    assert "cloudflared: environment differs" in found
+    compose["services"]["cloudflared"] = {"image": "example"}  # type: ignore[index]
+    assert any("services differ" in p for p in drift(wrapper, compose))
 
 
 def _config(path: str, extra: dict[str, str]) -> Config:
@@ -159,8 +146,6 @@ def _config(path: str, extra: dict[str, str]) -> Config:
             path,
             "--profile",
             "admin",
-            "--profile",
-            "tunnel",
             "config",
             "--format",
             "json",

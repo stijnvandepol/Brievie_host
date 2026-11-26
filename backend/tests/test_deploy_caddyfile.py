@@ -103,8 +103,14 @@ def code(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
-def site_tunnel() -> str:
-    return block("\nhttp://:8080 {")
+# A compose-only install keeps its pasted compose file while BRIEVIE_VERSION moves on: the
+# 0.5.0 file passes BRIEVIE_TUNNEL_HOST, this release's passes BRIEVIE_PUBLIC_HOST_MATCH.
+# The Caddyfile must honour both, or the public name stops being public by name (H1 of the
+# review of PR #65).
+OLD_AND_NEW_MATCH = (
+    "@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid} "
+    "{$BRIEVIE_TUNNEL_HOST:old-hostname-not-set.invalid}"
+)
 
 
 def site_home() -> str:
@@ -122,42 +128,58 @@ def test_every_proxy_to_the_api_sets_the_three_edge_headers() -> None:
         "header_up X-Brievie-Peer-IP {remote_host}",
     ):
         assert line in to_api, line
-    # Both limits go through it, and both listeners import the routes.
+    # Both limits go through it, and the one site imports the routes.
     assert code(CADDYFILE).count("import to_api {args[0]}") == 2
     assert "import brievie_routes" in site_home()
-    assert "import brievie_routes" in site_tunnel()
 
 
-def test_cf_connecting_ip_is_read_only_on_the_tunnel_listener() -> None:
+def test_there_is_no_tunnel_listener_and_no_cf_connecting_ip() -> None:
+    # Owner decision of 26-11: remote access is the user's own tool, forwarding to :443.
     text = code(CADDYFILE)
-    assert text.count("CF-Connecting-IP") == 1
-    assert "client_ip_headers CF-Connecting-IP" in block("servers :8080 {")
-    assert "client_ip_headers" not in block("servers :443 {")
-    assert "CF-Connecting-IP" not in site_home()
+    assert "8080" not in text
+    assert "CF-Connecting-IP" not in text
+    assert "client_ip_headers" not in text
+    assert "tunnel" not in text.replace("BRIEVIE_TUNNEL_HOST", "").lower()
+    # Only the old name of the public-name match stays, for an older compose file.
+    assert text.count("BRIEVIE_TUNNEL") == 1
+    assert "BRIEVIE_TUNNEL_TOKEN" not in CADDYFILE
+    # One site only: every name Caddy answers is served by the block that decides the route.
+    sites = [line for line in re.findall(r"^[^\s(#].*\{$", text, re.MULTILINE)]
+    assert len(sites) == 1, sites
 
 
-def test_tunnel_listener_forces_https_and_the_public_host() -> None:
-    tunnel = site_tunnel()
-    assert "@plain header X-Forwarded-Proto http" in tunnel
-    assert re.search(
-        r"redir @plain https://\{\$BRIEVIE_TUNNEL_HOST:[a-z.-]+\.invalid\}\{uri\} 308", tunnel
-    )
-    assert "request_header X-Forwarded-Proto https" in tunnel
-    assert re.search(r"import brievie_routes \{\$BRIEVIE_TUNNEL_HOST:[a-z.-]+\.invalid\}", tunnel)
-    assert "brievie_route public" in tunnel
-    # Plain http, no certificate: Cloudflare ended TLS already.
-    assert "tls" not in code(tunnel)
-
-
-def test_trusted_proxies_only_from_the_variable_on_443_and_private_ranges_on_8080() -> None:
+def test_trusted_proxies_only_from_the_variable_on_443() -> None:
     text = code(CADDYFILE)
-    assert text.count("trusted_proxies static") == 2
+    assert text.count("trusted_proxies static") == 1
     on_443 = block("servers :443 {")
     assert "trusted_proxies static {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in on_443
     assert "trusted_proxies_strict" in on_443
-    assert "trusted_proxies static private_ranges" in block("servers :8080 {")
     # Nobody passes X-Forwarded-For on by hand: Caddy writes it from its trust rules.
     assert not re.search(r"header_up\s+[+-]?X-Forwarded-For", CADDYFILE, re.IGNORECASE)
+
+
+def test_a_users_own_cloudflared_on_443_lands_on_the_public_route() -> None:
+    """What the user's cloudflared sends: the https port, Host = public name and an
+    X-Forwarded-For from an address that is not in BRIEVIE_TRUSTED_PROXIES.
+
+    Text rules, since Caddy is not run here (CI's routes-check runs the real thing): the
+    site answers the public name, `@public_name` and `@proxied_xff` both turn the route to
+    public, and both come after the private default, so they win.
+    """
+    home = block("\n{$BRIEVIE_HOSTNAME} {$BRIEVIE_VPN_HOSTNAME} {$BRIEVIE_PUBLIC_HOSTNAME} {")
+    assert (
+        "{$BRIEVIE_PUBLIC_HOSTNAME}"
+        in CADDYFILE.split("\n{$BRIEVIE_HOSTNAME}", 1)[1].split("\n", 1)[0]
+    )
+    assert OLD_AND_NEW_MATCH in home
+    for name in ("public_name", "proxied_xff"):
+        variables = block(f"vars @{name} {{")
+        assert "brievie_route public" in variables, name
+        assert home.index("vars @direct {") < home.index(f"vars @{name} {{"), name
+    # The api gets the Host as sent (with its port): the origin check needs it.
+    assert "import brievie_routes {http.request.hostport}" in home
+    # A name that is not set resolves nowhere: unknown Hosts fail closed, never private.
+    assert "public-hostname-not-set.invalid" in home
 
 
 def test_the_route_on_443_is_decided_by_name_first_and_fails_closed() -> None:
@@ -165,7 +187,7 @@ def test_the_route_on_443_is_decided_by_name_first_and_fails_closed() -> None:
     # and Cloudflare's headers on :443 make a request public too.
     home = site_home()
     assert "@direct not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
-    assert "@public_name host {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}" in home
+    assert OLD_AND_NEW_MATCH in home
     assert "@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
     assert "@cf_ray header Cf-Ray *" in home
     assert "@cf_client header Cf-Connecting-Ip *" in home
@@ -193,7 +215,7 @@ def test_hsts_comes_from_the_route_var() -> None:
     headers = block("(security_headers) {")
     assert 'Strict-Transport-Security "max-age={vars.brievie_hsts}"' in headers
     assert "BRIEVIE_HSTS_SECONDS" not in code(headers)
-    assert "brievie_hsts 31536000" in site_tunnel()
+    assert "brievie_hsts 31536000" in block("vars @via_proxy {")
 
 
 def test_the_home_route_keeps_the_host_with_its_port() -> None:
@@ -206,9 +228,8 @@ def test_default_sni_is_the_home_name() -> None:
     assert re.search(r"^\tdefault_sni \{\$BRIEVIE_HOSTNAME\}$", CADDYFILE, re.MULTILINE)
 
 
-def test_8080_is_never_published() -> None:
-    # The tunnel listener trusts every container's CF-Connecting-IP: published, anyone
-    # could pick their own address. Every published port targets 80 or 443 only.
+def test_only_80_and_443_are_published() -> None:
+    # Every published port targets 80 or 443 only; no listener exists for anything else.
     root = Path(__file__).resolve().parents[2]
     for path in (
         root / "deploy" / "docker-compose.yml",

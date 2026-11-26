@@ -24,7 +24,6 @@ SERVICES = (
     "intake",
     "keeper",
     "caddy",
-    "cloudflared",
     "admin",
 )
 
@@ -74,11 +73,6 @@ def test_a_secret_variable_is_a_file_or_empty_by_default() -> None:
         if match is None:
             continue
         name, value = match.groups()
-        # cloudflared reads its token as TUNNEL_TOKEN; Brievie's name for it is
-        # BRIEVIE_TUNNEL_TOKEN (the one place a secret is renamed on its way in).
-        if name == "TUNNEL_TOKEN":
-            assert value == "${BRIEVIE_TUNNEL_TOKEN:-}", line
-            continue
         assert value == f"${{{name}:-}}", line
 
 
@@ -98,9 +92,9 @@ def test_both_brievie_images_share_one_version_default() -> None:
 
 
 def test_every_service_but_caddy_uses_the_backend_image_by_anchor() -> None:
-    # postgres, caddy and cloudflared name their own
-    assert TEXT.count("<<: *backend") == len(SERVICES) - 3
-    for name in ("postgres", "caddy", "cloudflared"):
+    # postgres and caddy name their own
+    assert TEXT.count("<<: *backend") == len(SERVICES) - 2
+    for name in ("postgres", "caddy"):
         assert "<<: *backend" not in service(name)
 
 
@@ -114,7 +108,6 @@ def test_every_service_but_caddy_uses_the_backend_image_by_anchor() -> None:
         "worker",
         "intake",
         "keeper",
-        "cloudflared",
         "admin",
     ],
 )
@@ -201,7 +194,7 @@ def test_the_three_places_to_change_are_marked() -> None:
 
 
 def test_logs_rotate() -> None:
-    assert TEXT.count('max-size: "10m"') == 3  # the anchor, caddy and cloudflared
+    assert TEXT.count('max-size: "10m"') == 2  # the anchor and caddy
     assert "restart: always" not in TEXT
 
 

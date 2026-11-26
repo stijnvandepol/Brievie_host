@@ -28,10 +28,6 @@ KINDS = (
     # A request with a proxy's headers (X-Forwarded-For and the like) from a source that is
     # not a trusted proxy: a proxy that is not trusted yet.
     "unknown_proxy",
-    # Cloudflare's headers on the https port: a tunnel pointed at :443, or proxied DNS.
-    "cloudflare_on_https_port",
-    # A request through the tunnel listener.
-    "tunnel",
     # A request from a trusted proxy that named no client (no X-Forwarded-For).
     "proxy_without_forwarding",
     # A public-route request whose Host was not the public name.

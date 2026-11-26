@@ -132,7 +132,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md); please do not open a publ
 [docs/SELFHOST.md](docs/SELFHOST.md) section 24. The file is `deploy/compose/docker-compose.yml`,
 attached to every release. The rest of this section is the `./brievie` way (a git checkout).
 
-**Away from home** (VPN, Cloudflare Tunnel or your own reverse proxy): see
+**Away from home** (a VPN, a tunnel or a reverse proxy of your own, set up outside Brievie): see
 [docs/SELFHOST.md](docs/SELFHOST.md) section 25, "Van buiten bereikbaar".
 
 ### Start

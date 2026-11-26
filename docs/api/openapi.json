@@ -6029,18 +6029,16 @@
       "TunnelOut": {
         "properties": {
           "connected": {
+            "default": "not_set",
             "title": "Connected",
             "type": "string"
           },
           "token_set": {
+            "default": false,
             "title": "Token Set",
             "type": "boolean"
           }
         },
-        "required": [
-          "token_set",
-          "connected"
-        ],
         "title": "TunnelOut",
         "type": "object"
       },
@@ -9271,7 +9269,7 @@
     },
     "/api/v1/server/external-access": {
       "get": {
-        "description": "Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret: only whether a tunnel token is set. Waits up to 2 seconds for the tunnel, outside a transaction. Cache-Control: no-store.",
+        "description": "Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret. `tunnel` is kept for older clients and is always not set (Brievie runs no tunnel; remote access is your own tool). Cache-Control: no-store.",
         "operationId": "getExternalAccess",
         "parameters": [],
         "responses": {

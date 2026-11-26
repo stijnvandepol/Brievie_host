@@ -445,14 +445,14 @@ jobs:
             -e BRIEVIE_HOSTNAME=192.168.1.20 -e BRIEVIE_HSTS_SECONDS=0 \
             -e BRIEVIE_MAX_BODY_BYTES=2621440 -e BRIEVIE_MAX_UPLOAD_BYTES=33554432 \
             -e BRIEVIE_VPN_HOSTNAME=nas.tail1234.ts.net -e BRIEVIE_PUBLIC_HOSTNAME=brievie.example.test \
-            -e BRIEVIE_TUNNEL_HOST=brievie.example.test \
+            -e BRIEVIE_PUBLIC_HOST_MATCH=brievie.example.test \
             -e "BRIEVIE_TRUSTED_PROXIES=192.168.1.5/32 10.0.0.0/8" \
             brievie/proxy:scan caddy validate --config /etc/caddy/Caddyfile
           docker run --rm --network none \
             -e BRIEVIE_HOSTNAME=brievie.test -e BRIEVIE_HSTS_SECONDS=0 \
             -e BRIEVIE_MAX_BODY_BYTES=2621440 -e BRIEVIE_MAX_UPLOAD_BYTES=33554432 \
             -e BRIEVIE_VPN_HOSTNAME= -e BRIEVIE_PUBLIC_HOSTNAME= \
-            -e BRIEVIE_TUNNEL_HOST=public-hostname-not-set.invalid -e BRIEVIE_TRUSTED_PROXIES=127.0.0.1/32 \
+            -e BRIEVIE_PUBLIC_HOST_MATCH=public-hostname-not-set.invalid -e BRIEVIE_TRUSTED_PROXIES=127.0.0.1/32 \
             brievie/proxy:scan caddy validate --config /etc/caddy/Caddyfile
       - name: The proxy carries the Caddyfile and script of the repository
         run: |
@@ -488,18 +488,6 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore.yaml
-      # The optional tunnel's image, as both compose files pin it (a text test compares).
-      - name: Scan the cloudflared image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.76.2
-          image-ref: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          # Its own short-lived list: nothing accepted here applies to Brievie's images.
-          trivyignores: .trivyignore.cloudflared.yaml
 
   # The way a user installs it: fresh secrets, build the images, start everything.
   stack:
@@ -519,26 +507,21 @@ jobs:
           persist-credentials: false
       - name: Create deploy/.env with fresh secrets
         run: sh deploy/init-env.sh
-      # Van buiten bereikbaar: a VPN name, a public name and a made-up tunnel token (made
-      # here, masked). No real tunnel: the listener is reached from the compose network.
-      - name: Add the names of every way and a made-up tunnel token
+      # Van buiten bereikbaar: a VPN name and a public name. No tunnel is started: a user's
+      # own cloudflared is simulated with requests to the https port (routes-check.sh).
+      - name: Add the names of every way
         run: |
           set -euo pipefail
-          token=$(openssl rand -base64 48 | tr -d '\n')
-          echo "::add-mask::$token"
-          printf '%s' "$token" > "$RUNNER_TEMP/tunnel-token"
           {
             echo "BRIEVIE_VPN_HOSTNAME=$VPN_HOST"
             echo "BRIEVIE_PUBLIC_HOSTNAME=$PUBLIC_HOST"
-            echo "BRIEVIE_TUNNEL_TOKEN=$token"
           } >> deploy/.env
-      - name: The tunnel profile is valid, with and without a token
+      - name: The compose file is valid, with and without the names
         run: |
           set -euo pipefail
-          $COMPOSE --profile tunnel config --quiet
-          grep -v '^BRIEVIE_TUNNEL_TOKEN=' deploy/.env > "$RUNNER_TEMP/no-token.env"
-          $COMPOSE --env-file "$RUNNER_TEMP/no-token.env" --profile tunnel config --quiet
-          $COMPOSE --env-file "$RUNNER_TEMP/no-token.env" config --quiet
+          $COMPOSE config --quiet
+          grep -v -E '^BRIEVIE_(VPN|PUBLIC)_HOSTNAME=' deploy/.env > "$RUNNER_TEMP/no-names.env"
+          $COMPOSE --env-file "$RUNNER_TEMP/no-names.env" config --quiet
       - name: Build and start the stack
         run: $COMPOSE up -d --build --wait --wait-timeout 600
       - name: The API answers through Caddy
@@ -571,36 +554,36 @@ jobs:
           code=$($COMPOSE logs api | sed -n 's/.*Installatiecode: //p' | head -n 1)
           echo "::add-mask::$code"
           SETUP_TOKEN=$code KEEP_JAR="$RUNNER_TEMP/jar" .github/scripts/recovery-sheet-check.sh 409
-      - name: Caddy's configuration adapts, and only the tunnel listener reads CF-Connecting-IP
+      - name: Caddy's configuration adapts, with one listener and no CF-Connecting-IP
         run: .github/scripts/routes-check.sh caddy
-      - name: HSTS per route, the tunnel listener, 413s and forged route headers
+      - name: HSTS per route, a user's own cloudflared on the https port, 413s and forged route headers
         run: .github/scripts/routes-check.sh listeners
-      - name: A signed-in admin cannot pick an address, and the web is closed on the tunnel
+      - name: A signed-in admin cannot pick an address, and the web is closed on the public route
         run: .github/scripts/routes-check.sh session "$RUNNER_TEMP/jar"
-      - name: The tunnel network reaches Caddy only, and nobody poses as Caddy
+      - name: Nobody poses as Caddy
         run: .github/scripts/routes-check.sh isolation
-      - name: The tunnel starts on its own and its token stays in cloudflared
+      # A compose-only install keeps its old compose file while the version moves on: the new
+      # proxy with only the variable of 0.5.0 must still mark the public name as public.
+      - name: The new proxy with the variable of an older compose file
         run: |
           set -euo pipefail
-          $COMPOSE --profile tunnel up -d --no-deps cloudflared
-          # A made-up token: cloudflared reads it and refuses it (no tunnel is made).
-          for _ in $(seq 1 30); do
-            if $COMPOSE --profile tunnel logs --no-color cloudflared 2>&1 | grep -qi 'token'; then break; fi
-            sleep 1
-          done
-          $COMPOSE --profile tunnel logs --no-color cloudflared 2>&1 | grep -i 'token' | head -n 3
-          .github/scripts/routes-check.sh token "$RUNNER_TEMP/tunnel-token"
+          printf '%s\n' 'services:' '  caddy:' '    environment:' \
+            '      BRIEVIE_PUBLIC_HOST_MATCH: public-hostname-not-set.invalid' \
+            "      BRIEVIE_TUNNEL_HOST: $PUBLIC_HOST" > "$RUNNER_TEMP/old-env.yml"
+          $COMPOSE -f "$RUNNER_TEMP/old-env.yml" up -d --no-deps caddy
+          .github/scripts/routes-check.sh oldenv
+          $COMPOSE up -d --no-deps caddy
       - name: Container state on failure
         if: failure()
         # No logs here: the api log holds the installation code.
-        run: $COMPOSE --profile tunnel ps --all
+        run: $COMPOSE ps --all
       - name: Requests that reached the api without Caddy, on failure
         if: failure()
         # Only these lines of the api log: addresses, never the installation code.
         run: $COMPOSE logs --no-color api | grep -F 'reached the api without Caddy' | tail -n 5 || true
       - name: Stop
         if: always()
-        run: $COMPOSE --profile tunnel down --volumes
+        run: $COMPOSE down --volumes
 
   # The install with only a compose file (deploy/compose/docker-compose.yml): no deploy/.env,
   # no ./brievie. The images of a pull request are not on ghcr, so they are built to the
@@ -683,7 +666,7 @@ jobs:
           groups=$(printf '%s' "$key" | fold -w 4 | paste -sd' ' -)
           echo "::add-mask::$groups"
           SETUP_TOKEN=$code MASTER_KEY_GROUPS=$groups KEEP_JAR="$RUNNER_TEMP/jar" .github/scripts/recovery-sheet-check.sh 200
-      - name: The routes of the compose file, and the tunnel route with the web interface open
+      - name: The routes of the compose file, and the public route with the web interface open
         run: |
           set -euo pipefail
           .github/scripts/routes-check.sh caddy
@@ -700,37 +683,17 @@ jobs:
           diff "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt"
           curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
             https://localhost/api/v1/health
-      - name: The tunnel reads its token from a file, and the token shows nowhere
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/tunnel"
-          openssl rand -base64 48 | tr -d '\n' > "$RUNNER_TEMP/tunnel/token"
-          echo "::add-mask::$(cat "$RUNNER_TEMP/tunnel/token")"
-          # cloudflared runs as uid 65532: the file is its own, readable by it alone.
-          sudo chown 65532:65532 "$RUNNER_TEMP/tunnel/token"
-          sudo chmod 0400 "$RUNNER_TEMP/tunnel/token"
-          sudo cp "$RUNNER_TEMP/tunnel/token" "$RUNNER_TEMP/tunnel-token-copy"
-          sudo chown "$(id -u)" "$RUNNER_TEMP/tunnel-token-copy"
-          export BRIEVIE_TUNNEL_TOKEN_FILE="$RUNNER_TEMP/tunnel/token"
-          $COMPOSE --profile tunnel up -d --no-deps cloudflared
-          # A made-up token: cloudflared reads the file and refuses what is in it.
-          for _ in $(seq 1 30); do
-            if $COMPOSE --profile tunnel logs --no-color cloudflared 2>&1 | grep -qi 'token'; then break; fi
-            sleep 1
-          done
-          $COMPOSE --profile tunnel logs --no-color cloudflared 2>&1 | grep -i 'token' | head -n 3
-          TOKEN_AS_FILE=yes .github/scripts/routes-check.sh token "$RUNNER_TEMP/tunnel-token-copy"
       - name: Container state on failure
         if: failure()
         # No logs here: the api log holds the installation code.
-        run: $COMPOSE --profile tunnel ps --all || true
+        run: $COMPOSE ps --all || true
       - name: The log of the one-shot services on failure
         if: failure()
         # The one-shot services print sentences, never a secret (the secrets check proves it).
         run: $COMPOSE logs --no-color init-secrets init || true
       - name: Stop
         if: always()
-        run: $COMPOSE --profile tunnel down --volumes || true
+        run: $COMPOSE down --volumes || true
 
   # The oldest Docker Compose we promise to work with (S 4.13): the file uses anchors with
   # merge keys, depends_on conditions, profiles, network_mode: none and nested defaults.

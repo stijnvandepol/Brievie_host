@@ -44,8 +44,8 @@ def get_server_addresses(request: HttpRequest) -> ServerAddressesOut:
         "Server admins only, web session only (a device token answers 401). What is set for "
         "reaching this server from outside the home network, what works and what not, as "
         "check codes. Compose decides; nothing here changes a setting. Never a token or "
-        "secret: only whether a tunnel token is set. Waits up to 2 seconds for the tunnel, "
-        "outside a transaction. Cache-Control: no-store."
+        "secret. `tunnel` is kept for older clients and is always not set (Brievie runs no "
+        "tunnel; remote access is your own tool). Cache-Control: no-store."
     ),
     operation_id="getExternalAccess",
 )
@@ -63,7 +63,7 @@ def get_external_access(request: HttpRequest, response: HttpResponse) -> Externa
             AddressOut(url=a.url, kind=a.kind, certificate=a.certificate) for a in found.addresses
         ],
         public_web=found.public_web,
-        tunnel=TunnelOut(token_set=found.tunnel_token_set, connected=found.tunnel_connected),
+        tunnel=TunnelOut(),
         trusted_proxies=found.trusted_proxies,
         second_factor_available=found.second_factor_available,
         seen_as=SeenAsOut(

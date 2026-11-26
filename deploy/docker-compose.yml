@@ -79,14 +79,11 @@ services:
       # Requests arrive through Brievie's Caddy, which writes the route and the client
       # address itself (X-Brievie-Route, X-Brievie-Client-IP).
       BRIEVIE_BEHIND_CADDY: "true"
-      # Off: through the public address (tunnel, own reverse proxy) only the app works.
+      # Off: through the public address (your own tunnel or reverse proxy) only the app works.
       BRIEVIE_PUBLIC_WEB: ${BRIEVIE_PUBLIC_WEB:-false}
       BRIEVIE_TRUSTED_PROXIES: ${BRIEVIE_TRUSTED_PROXIES:-}
       # A trusted range wider than a /24 or /64 only when this says true.
       BRIEVIE_TRUSTED_PROXIES_WIDE: ${BRIEVIE_TRUSTED_PROXIES_WIDE:-false}
-      # Only whether a tunnel token is set, never the token (the settings page).
-      BRIEVIE_TUNNEL_TOKEN_SET: ${BRIEVIE_TUNNEL_TOKEN:+true}
-      BRIEVIE_TUNNEL_TOKEN_FILE_SET: ${BRIEVIE_TUNNEL_TOKEN_FILE:+true}
       # How long a web session may sit idle and how long it lives at most; the worker
       # applies the same limits when it cleans up. The idle limit may not exceed the other.
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
@@ -295,16 +292,15 @@ services:
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
       # The other names it serves, your own reverse proxy's address(es) and the public
-      # name the tunnel listener passes on as Host ("Van buiten bereikbaar").
+      # name that always counts as public, whatever its source ("Van buiten bereikbaar"). A
+      # name that resolves nowhere while none is set: the match then never fires.
       BRIEVIE_VPN_HOSTNAME: ${BRIEVIE_VPN_HOSTNAME:-}
       BRIEVIE_PUBLIC_HOSTNAME: ${BRIEVIE_PUBLIC_HOSTNAME:-}
-      BRIEVIE_TUNNEL_HOST: ${BRIEVIE_PUBLIC_HOSTNAME:-public-hostname-not-set.invalid}
+      BRIEVIE_PUBLIC_HOST_MATCH: ${BRIEVIE_PUBLIC_HOSTNAME:-public-hostname-not-set.invalid}
       BRIEVIE_TRUSTED_PROXIES: ${BRIEVIE_TRUSTED_PROXIES:-127.0.0.1/32}
     ports:
       - "${BRIEVIE_HTTP_PORT:-80}:80"
       - "${BRIEVIE_HTTPS_PORT:-443}:443"
-    # Its own network with the optional tunnel; the rest of the stack on the default one.
-    networks: [default, tunnel]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro
@@ -313,36 +309,6 @@ services:
       # A copy of the CA for the back-up (keeper and admin only; see caddy-publish-root.sh).
       - caddy-authority:/authority
       - caddy-config:/config
-
-  # Optional: Cloudflare Tunnel ("Van buiten bereikbaar", docs/SELFHOST.md). Started only
-  # with the profile `tunnel`: ./brievie does that when BRIEVIE_TUNNEL_TOKEN (or
-  # BRIEVIE_TUNNEL_TOKEN_FILE) is set; by hand, COMPOSE_PROFILES=tunnel. The token reaches
-  # this container only, never the api. It forwards to Caddy's unpublished listener
-  # http://caddy:8080. Cloudflare ends the encryption on its own servers: it can read
-  # everything that passes; a VPN cannot be read in between.
-  cloudflared:
-    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
-    profiles: ["tunnel"]
-    restart: unless-stopped
-    depends_on:
-      caddy:
-        condition: service_started
-    # Its metrics only on its own loopback: nothing on the network reads them.
-    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]
-    environment:
-      # The token as a variable, or (better: it then shows nowhere but in the file) a file
-      # on the host, owned by uid 65532 (cloudflared's user) with mode 0400.
-      TUNNEL_TOKEN: ${BRIEVIE_TUNNEL_TOKEN:-}
-      TUNNEL_TOKEN_FILE: ${BRIEVIE_TUNNEL_TOKEN_FILE:+/run/brievie-tunnel/token}
-    volumes:
-      - ${BRIEVIE_TUNNEL_TOKEN_FILE:-/dev/null}:/run/brievie-tunnel/token:ro
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    # Only the network it shares with Caddy: it can reach caddy:8080 and the internet,
-    # never the api, the worker or PostgreSQL.
-    networks: [tunnel]
-    # No published port: it only dials out to Cloudflare.
 
 volumes:
   pgdata:
@@ -361,8 +327,6 @@ volumes:
   update-backup:
 
 networks:
-  # Caddy and the optional cloudflared only (security review of PR #53).
-  tunnel: {}
   # The intake service and PostgreSQL only: no way out to the internet.
   scan:
     internal: true
