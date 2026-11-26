@@ -271,8 +271,8 @@ def test_a_flooded_folder_is_counted_and_listed_without_a_stat_per_file(
     def no_stat(*args: object, **kwargs: object) -> os.stat_result:
         raise AssertionError("stat")
 
-    monkeypatch.setattr(scan_files.os, "stat", no_stat)
-    monkeypatch.setattr(scan_files.os, "lstat", no_stat)
+    monkeypatch.setattr(os, "stat", no_stat)
+    monkeypatch.setattr(os, "lstat", no_stat)
     assert scan_files.count_candidates(root_fd, ("kantoor",)) == 31
     assert list_subfolders(root_fd, ("kantoor",)) == ["Map", "mislukt"]
     assert len(scan_files.list_failed(root_fd, ("kantoor",))) == 30
