@@ -857,6 +857,12 @@ GitHub runner), about 4 GB free, and a fixed name or IP address for the server. 
 are `amd64` and `arm64`. One server per Docker host: the project is called `brievie`, as with
 `./brievie`; never start both at once on the same volumes.
 
+For a Synology, take the shorter `docker-compose.synology.yml` from the same release
+instead: the same services, networks, volumes and hardening, with the settings a household
+never uses left out and the ports already 8080 and 8443. It is generated from the file
+above (`.github/scripts/slim-compose.py`), never edited by hand, and the two can replace each
+other on the same data.
+
 ### What you change
 
 Only the lines marked `<--`: the **name or IP address** your iPhone uses for the server

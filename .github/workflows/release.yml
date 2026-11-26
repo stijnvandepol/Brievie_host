@@ -6,8 +6,8 @@ name: Release
 # the backend image and the proxy image (Caddy with Brievie's Caddyfile) for amd64 and
 # arm64, pushes each by digest, scans both architectures, tags that digest with the
 # version, attests it, and makes the GitHub release from the CHANGELOG section, with the
-# compose file (docker-compose.yml, and a copy with both images pinned by digest) as
-# assets. A run by hand (workflow_dispatch) checks, builds and scans without
+# compose file (docker-compose.yml, a copy with both images pinned by digest, and the
+# short docker-compose.synology.yml generated from it) as assets. A run by hand (workflow_dispatch) checks, builds and scans without
 # publishing anything: the proof before the first tag.
 #
 # Only a tag pushed to this repository starts the publishing jobs: there is no
@@ -323,5 +323,8 @@ jobs:
           cp deploy/compose/docker-compose.yml "$RUNNER_TEMP/docker-compose.yml"
           python3 .github/scripts/pin-compose.py deploy/compose/docker-compose.yml \
             "$RUNNER_TEMP/docker-compose.pinned.yml" --backend "$BACKEND_DIGEST" --proxy "$PROXY_DIGEST"
+          python3 .github/scripts/slim-compose.py deploy/compose/docker-compose.yml \
+            "$RUNNER_TEMP/docker-compose.synology.yml"
           gh release create "$REF_NAME" --verify-tag --title "Brievie $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
-            "$RUNNER_TEMP/docker-compose.yml" "$RUNNER_TEMP/docker-compose.pinned.yml"
+            "$RUNNER_TEMP/docker-compose.yml" "$RUNNER_TEMP/docker-compose.pinned.yml" \
+            "$RUNNER_TEMP/docker-compose.synology.yml"

@@ -3816,3 +3816,13 @@ An independent review found one high and five medium points; the owner ruled on 
   use the memory it has. "No internet" is no barrier on its own: the share is writable.
   **Follow-up, before a business roll-out: the parser in its own container without keys and
   without network.**
+
+### The short Synology compose file is generated (2026-11-26)
+
+`docker-compose.synology.yml` (a release asset) is written by `.github/scripts/slim-compose.py`
+from `deploy/compose/docker-compose.yml`, not kept by hand: a second file kept by hand drifts
+(a new service or hardening line in one file and not the other). It drops comments, optional
+pass-through variables and tuning, and collapses the repeated hardening and logging with
+anchors, but changes no service, network, volume or name. CI compares `docker compose config`
+of both (bar a named list of omitted variables, kept in `slim-compose-parity.py`) and runs the
+secrets check on the short file. No new dependency (standard library).
