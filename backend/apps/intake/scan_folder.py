@@ -169,20 +169,24 @@ def scan_workspace(
     if config is None:
         return
     top: RelPath = (config.folder_name,)
+    # Claimed before anything is written in it: a folder of another workspace, or an
+    # existing one with something in it, gets no mislukt/ and no probe file.
+    try:
+        claim = scan_files.claim_folder(root_fd, top, str(workspace_id))
+    except ScanRefusedError:
+        claim = None
+    if claim is None:
+        _store_probe(workspace_id, scan_files.probe(root_fd, top), now=now)
+        return
+    if claim != "ours":
+        _store_probe(workspace_id, scan_files.ProbeResult(claim, 0, 0), now=now)
+        return
     # When this fails, the probe says what is wrong.
     with contextlib.suppress(ScanRefusedError):
         scan_files.ensure_folder(root_fd, (*top, RESERVED))
     checked = scan_files.probe(root_fd, top)
     if checked.state in ("missing", "not_readable"):
         _store_probe(workspace_id, checked, now=now)
-        return
-    if not scan_files.claim_folder(root_fd, top, str(workspace_id)):
-        # Another workspace read this folder before (and may have left letters in it).
-        _store_probe(
-            workspace_id,
-            scan_files.ProbeResult("taken", checked.owner_uid, checked.owner_gid),
-            now=now,
-        )
         return
     for folder in config.folders.values():
         if folder.state == ScanFolder.State.ACTIVE:

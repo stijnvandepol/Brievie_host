@@ -448,12 +448,40 @@ def test_a_name_that_is_not_utf8_is_refused() -> None:
     assert scan_files.valid_name("brief.pdf")
 
 
-def test_a_workspace_claims_its_folder(root_fd: int, scan_root: Path) -> None:
-    (scan_root / "kantoor").mkdir()
-    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een")
-    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een")
-    assert not claim_folder(root_fd, ("kantoor",), "werkruimte-twee")
+def test_a_workspace_claims_the_folder_it_makes(root_fd: int, scan_root: Path) -> None:
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "ours"
+    assert (scan_root / "kantoor").is_dir()
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "ours"
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-twee") == "taken"
     assert (scan_root / "kantoor" / ".brievie-werkruimte").read_text() == "werkruimte-een\n"
+
+
+def test_an_existing_empty_folder_may_be_claimed(root_fd: int, scan_root: Path) -> None:
+    (scan_root / "kantoor" / "@eaDir").mkdir(parents=True)
+    (scan_root / "kantoor" / ".DS_Store").write_bytes(b"x")
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "ours"
+
+
+@pytest.mark.parametrize("content", ["brief.pdf", "notitie.txt", "Map"])
+def test_an_existing_folder_with_anything_in_it_is_not_claimed(
+    root_fd: int, scan_root: Path, content: str
+) -> None:
+    folder = scan_root / "hr"
+    if content == "Map":
+        (folder / content).mkdir(parents=True)
+    else:
+        write(folder / content)
+    assert claim_folder(root_fd, ("hr",), "werkruimte-een") == "not_empty"
+    assert not (folder / ".brievie-werkruimte").exists()
+    assert sorted(p.name for p in folder.iterdir()) == [content]
+
+
+def test_an_empty_claim_of_a_round_that_died_is_finished(root_fd: int, scan_root: Path) -> None:
+    (scan_root / "kantoor").mkdir()
+    (scan_root / "kantoor" / ".brievie-werkruimte").write_bytes(b"")
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "ours"
+    assert (scan_root / "kantoor" / ".brievie-werkruimte").read_text() == "werkruimte-een\n"
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-twee") == "taken"
 
 
 def test_a_linked_claim_is_refused(root_fd: int, scan_root: Path, tmp_path: Path) -> None:
@@ -461,7 +489,7 @@ def test_a_linked_claim_is_refused(root_fd: int, scan_root: Path, tmp_path: Path
     outside = tmp_path / "claim"
     outside.write_text("werkruimte-een\n")
     (scan_root / "kantoor" / ".brievie-werkruimte").symlink_to(outside)
-    assert not claim_folder(root_fd, ("kantoor",), "werkruimte-een")
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "taken"
 
 
 # Security review of PR #64 (M1, M4)

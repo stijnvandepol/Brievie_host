@@ -172,6 +172,14 @@ describe("Scanmap", () => {
     expect(screen.getByText(/3 bestanden in de scanmap overgeslagen/)).toBeVisible();
   });
 
+  it("says when the chosen folder already holds something", async () => {
+    scanServer({ ...on, check: "not_empty" });
+    renderApp(path);
+    expect(
+      await screen.findByText(/alleen een map die het zelf maakt of die leeg is/),
+    ).toBeVisible();
+  });
+
   it("says when it works", async () => {
     scanServer(on);
     renderApp(path);

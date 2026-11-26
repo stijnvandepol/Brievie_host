@@ -3738,3 +3738,31 @@ it), rows under a previous folder name are not purged.
 - "Post in deze map is privé" and a proposal mode per folder (spec S 3.2a), if asked.
 - The pipeline's own parser isolation (its own uid or container) is still the follow-up of
   the PR #58 review; the `intake` service now checks scan-folder files without internet.
+
+### Security review of PR #64 (2026-11-26)
+
+An independent review found one high and five medium points; the owner ruled on each.
+
+- **H1: a killed round no longer stops the scan folder.** `scan_folders` runs under a lock;
+  a round of a worker that was killed stayed `doing` and held it for ever.
+  `retry_stalled_intake_jobs` (queue `intake`, every 5 minutes, without that lock) gives
+  stalled jobs back, as the pipeline and back-up queues do.
+- **M1: one odd file never stops a round.** Device, inode, size and mtime are stored as
+  signed 64-bit numbers (`scan_files.int8`: an unsigned 64-bit inode keeps its bits, an mtime
+  past 2262 is clamped); each row is saved in its own savepoint; a path longer than the column
+  is skipped. Skipped files are counted (`skipped_count`) and a round that breaks off sets the
+  check to `failing`, so the page no longer says "De scanmap werkt." while nothing comes in.
+- **M3, owner's ruling: a workspace's folder is a directory Brievie makes itself, or an
+  existing directory that is empty** (a NAS's own `@eaDir`, `#recycle` and dot files aside).
+  Anything else is never claimed, nothing is written in it, and the page says
+  "Er bestaat al een map met deze naam en er staat iets in." The claim is checked before
+  `mislukt/` or the probe file is made. A changed folder name is audited
+  (`workspace_setting_changed`, `setting=scan_folder_name`, `value=changed`, never the name);
+  linking a person or department to a folder is audited as before (`scan_folder_person`).
+  This narrows spec S 3.2a ("an existing directory with exactly the expected name is
+  adopted") for the workspace folder; inside a workspace's own claimed folder, an existing
+  person's folder is still adopted and "Koppel aan" still links an unknown one.
+- **M4: a round is bounded.** At most 500 candidates per folder and 2000 waiting rows per
+  workspace are looked at (the rest is counted); a row is written only when it changed; a
+  file that stays empty or keeps changing for an hour goes to `mislukt/` (`never_settled`);
+  imports wait while 50 scan letters of the workspace are still being read.

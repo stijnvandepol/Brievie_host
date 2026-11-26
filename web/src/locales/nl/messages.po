@@ -2111,6 +2111,10 @@ msgstr "Elke gecontroleerde brief en elk eigen document, om terug te vinden. Wat
 msgid "en"
 msgstr "en"
 
+#: src/routes/scan-folder.tsx
+msgid "Er bestaat al een map met deze naam en er staat iets in. Brievie gebruikt alleen een map die het zelf maakt of die leeg is. Kies een andere naam, of maak de map leeg."
+msgstr "Er bestaat al een map met deze naam en er staat iets in. Brievie gebruikt alleen een map die het zelf maakt of die leeg is. Kies een andere naam, of maak de map leeg."
+
 #: src/routes/inbox.tsx
 msgid "Er blijft niets liggen."
 msgstr "Er blijft niets liggen."

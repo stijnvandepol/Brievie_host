@@ -78,6 +78,9 @@ def make_world(*, per_person: bool = True, enabled: bool = True) -> World:
         )
     # Not everyone sees all post, departments on, admins do not read all.
     set_state(workspace, e=False, d=True, a=False)
+    if enabled:
+        # The first look makes and claims the workspace's folder (review of PR #64, M3).
+        scan_round(now=at(-LATER))
     return World(workspace, admin, member, colleague, member_person, colleague_person, department)
 
 
@@ -535,3 +538,25 @@ def test_a_round_that_breaks_is_shown_on_the_page(
     monkeypatch.setattr(scan_folder, "_record", broken)
     scan_round(now=at(LATER))
     assert settings_row(world).check_state == "failing"
+
+
+# Security review of PR #64 (M3)
+
+
+def test_an_existing_folder_with_files_is_never_taken_in(share: Path) -> None:
+    kept = put(share, "kantoor", "hr-brief.jpg")
+    before = kept.read_bytes()
+    world = make_world(per_person=False)
+    two_rounds()
+    assert letters(world) == []
+    assert kept.read_bytes() == before
+    assert sorted(p.name for p in (share / "kantoor").iterdir()) == ["hr-brief.jpg"]
+    assert settings_row(world).check_state == "not_empty"
+
+
+def test_an_existing_empty_folder_is_used(share: Path) -> None:
+    (share / "kantoor").mkdir()
+    world = make_world(per_person=False)
+    put(share, "kantoor", "brief.jpg")
+    two_rounds()
+    assert len(letters(world)) == 1

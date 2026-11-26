@@ -2111,6 +2111,10 @@ msgstr "Every checked letter and every own document, to find again. What still w
 msgid "en"
 msgstr "and"
 
+#: src/routes/scan-folder.tsx
+msgid "Er bestaat al een map met deze naam en er staat iets in. Brievie gebruikt alleen een map die het zelf maakt of die leeg is. Kies een andere naam, of maak de map leeg."
+msgstr "A folder with this name already exists and something is in it. Brievie only uses a folder it makes itself or one that is empty. Choose another name, or empty the folder."
+
 #: src/routes/inbox.tsx
 msgid "Er blijft niets liggen."
 msgstr "Nothing is lying too long."

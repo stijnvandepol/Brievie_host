@@ -113,7 +113,7 @@ def test_switching_on_with_the_suggested_name(admin: Client, ws_b: Workspace) ->
     assert row.actor_id == admin_of(ws_b).id
 
 
-def test_nothing_changed_writes_no_row_and_the_name_is_never_in_one(
+def test_nothing_changed_writes_no_row_and_a_rename_is_audited_without_the_name(
     admin: Client, ws_b: Workspace
 ) -> None:
     put(admin, ws_b, {"enabled": True, "folder_name": "post-kantoor"})
@@ -123,6 +123,7 @@ def test_nothing_changed_writes_no_row_and_the_name_is_never_in_one(
     rows = audit_rows(ws_b)
     assert [r.values for r in rows] == [
         {"setting": "scan_folder", "value": True},
+        {"setting": "scan_folder_name", "value": "changed"},
         {"setting": "scan_folder_per_person", "value": True},
     ]
     for row in rows:

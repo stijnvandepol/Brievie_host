@@ -77,7 +77,7 @@ _MAX_NUMBER = 1000
 class ScanRefusedError(Exception):
     """`code`: root_unset, root_missing, root_is_slash, root_overlaps_storage, bad_path,
     not_a_folder, not_a_file, linked, changed, too_large, not_imported,
-    failed_untouchable or no_free_name."""
+    failed_untouchable, no_free_name or not_writable."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -446,37 +446,72 @@ def list_failed(root_fd: int, folder: RelPath) -> set[str]:
         return set()
 
 
-def claim_folder(root_fd: int, folder: RelPath, owner: str) -> bool:
-    """Whether `folder` belongs to `owner` (a workspace id): the first workspace that reads
-    a folder writes `.brievie-werkruimte` in it (O_EXCL), and a folder another workspace
-    claimed is never read, also after that workspace renamed or left it. Removing the file
-    by hand gives the folder free. A link or anything odd in its place: not ours."""
+def claim_folder(root_fd: int, folder: RelPath, owner: str) -> str:
+    """Make `folder` the workspace's own before anything is written in it: "ours", "taken"
+    (another workspace claimed it) or "not_empty".
+
+    A folder Brievie makes itself, or an existing one that is empty (a NAS's own `@eaDir`,
+    `#recycle` or dot files aside), gets `.brievie-werkruimte` with `owner` (O_EXCL). An
+    existing folder with anything else in it is never claimed: a workspace admin cannot
+    point Brievie at another office's folder and take its files in (security review of PR
+    #64, M3). A claim of another workspace, or a link in its place, is not ours; removing
+    the file by hand gives the folder free."""
     _check(folder)
     expected = (owner + "\n").encode("utf-8")
-    with _folder(root_fd, folder) as fd:
+    with _folder(root_fd, folder[:-1]) as parent:
+        made = False
         try:
-            made = os.open(_CLAIM_NAME, _NEW_FILE_FLAGS, _REASON_MODE, dir_fd=fd)
+            os.mkdir(folder[-1], _FOLDER_MODE, dir_fd=parent)
+            made = True
         except FileExistsError:
-            made = None
+            pass
         except OSError:
-            return False
-        if made is not None:
-            try:
-                os.write(made, expected)
-            finally:
-                os.close(made)
-            return True
+            raise ScanRefusedError("not_a_folder") from None
+        try:
+            fd = _open_dir(parent, folder[-1])
+        except FileNotFoundError:
+            raise ScanRefusedError("not_a_folder") from None
+    try:
+        if made:
+            os.fchmod(fd, _FOLDER_MODE)
         try:
             existing = os.open(_CLAIM_NAME, _FILE_FLAGS, dir_fd=fd)
+        except FileNotFoundError:
+            existing = None
         except OSError:
-            return False
+            return "taken"
+        if existing is not None:
+            try:
+                info = os.fstat(existing)
+                if not _regular(info) or info.st_size > _CLAIM_MAX:
+                    return "taken"
+                if info.st_size == 0 and info.st_uid == os.getuid():
+                    # A round that died between making and writing its claim: finish it.
+                    existing_write = os.open(_CLAIM_NAME, os.O_WRONLY | os.O_NOFOLLOW, dir_fd=fd)
+                    try:
+                        os.write(existing_write, expected)
+                    finally:
+                        os.close(existing_write)
+                    return "ours"
+                return "ours" if os.read(existing, _CLAIM_MAX + 1) == expected else "taken"
+            finally:
+                os.close(existing)
+        if not made and any(not name.startswith((".", "@", "#")) for name in os.listdir(fd)):
+            return "not_empty"
         try:
-            info = os.fstat(existing)
-            if not _regular(info) or info.st_size > _CLAIM_MAX:
-                return False
-            return os.read(existing, _CLAIM_MAX + 1) == expected
+            claim = os.open(_CLAIM_NAME, _NEW_FILE_FLAGS, _PRIVATE_MODE, dir_fd=fd)
+        except FileExistsError:
+            return "taken"
+        except OSError:
+            # No right to write here: the probe says so.
+            raise ScanRefusedError("not_writable") from None
+        try:
+            os.write(claim, expected)
         finally:
-            os.close(existing)
+            os.close(claim)
+        return "ours"
+    finally:
+        os.close(fd)
 
 
 def probe(root_fd: int, folder: RelPath) -> ProbeResult:

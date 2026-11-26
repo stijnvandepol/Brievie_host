@@ -47,8 +47,9 @@ class ScanFolderOut(Schema):
     suggested_name: str = ""
     per_person: bool = False
     # The intake service's own look: ok, missing, not_readable, not_writable, failing (the
-    # last round broke off), taken (the
-    # folder belongs to another workspace: `.brievie-werkruimte` names another), or unknown
+    # last round broke off), taken (the folder belongs to another workspace:
+    # `.brievie-werkruimte` names another), not_empty (an existing folder with something in
+    # it, never claimed), or unknown
     # (no look in the last 5 minutes: the service does not run).
     check: str = "unknown"
     owner_uid: int = 0

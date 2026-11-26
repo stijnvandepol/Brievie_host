@@ -130,8 +130,18 @@ def configure_scan_folder(
             name = default_folder_name(workspace.name)
         if name and not valid_folder_name(name):
             raise ScanFolderError("invalid_name")
-        changes = {"scan_folder": enabled, "scan_folder_per_person": per_person}
-        before = {"scan_folder": stored.enabled, "scan_folder_per_person": stored.per_person}
+        changes: dict[str, bool | str] = {
+            "scan_folder": enabled,
+            "scan_folder_per_person": per_person,
+        }
+        before: dict[str, bool | str] = {
+            "scan_folder": stored.enabled,
+            "scan_folder_per_person": stored.per_person,
+        }
+        if stored.folder_name and name != stored.folder_name:
+            # Another folder on the share: audited, the name itself never (review of PR #64).
+            changes["scan_folder_name"] = "changed"
+            before["scan_folder_name"] = ""
         stored.enabled, stored.per_person, stored.folder_name = enabled, per_person, name
         try:
             with transaction.atomic():

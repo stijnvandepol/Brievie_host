@@ -84,6 +84,10 @@ function Check({ status }: { status: ScanFolder }) {
       return (
         <MessageBar intent="error">{t`Brievie kon de scanmap de laatste keer niet helemaal lezen. Er komen nu geen brieven binnen. Vraag de serverbeheerder om in het logboek van de dienst intake te kijken.`}</MessageBar>
       );
+    case "not_empty":
+      return (
+        <MessageBar intent="error">{t`Er bestaat al een map met deze naam en er staat iets in. Brievie gebruikt alleen een map die het zelf maakt of die leeg is. Kies een andere naam, of maak de map leeg.`}</MessageBar>
+      );
     case "taken":
       return (
         <MessageBar intent="error">{t`Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt.`}</MessageBar>

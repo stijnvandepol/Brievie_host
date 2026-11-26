@@ -1459,14 +1459,14 @@ jobs:
           set -euo pipefail
           share="$RUNNER_TEMP/scan"
           outside="$RUNNER_TEMP/outside"
-          mkdir -p "$share/kantoor" "$outside/map"
+          mkdir -p "$share/hr" "$outside/map"
           python3 .github/scripts/make-test-pdf.py "$outside/keep.pdf" "Blijft buiten de scanmap"
           python3 .github/scripts/make-test-pdf.py "$outside/map/ook.pdf" "Ook buiten de scanmap"
+          # Another office's folder with a letter in it: never taken in.
+          python3 .github/scripts/make-test-pdf.py "$share/hr/salaris.pdf" "Niet voor Brievie"
           sudo chown -R 20000:100 "$share"
           sudo chmod -R 2770 "$share"
-          sudo ln -s "$outside/keep.pdf" "$share/kantoor/link.pdf"
-          sudo ln -s "$outside/map" "$share/kantoor/map"
-          find "$outside" -type f -exec sha256sum {} + | sort > "$RUNNER_TEMP/outside-before.txt"
+          sudo find "$outside" "$share/hr" -type f -exec sha256sum {} + | sort > "$RUNNER_TEMP/outside-before.txt"
           echo "BRIEVIE_SCAN_DIR=$share" >> deploy/.env
       - name: Build and start the stack
         run: $COMPOSE up -d --build --wait --wait-timeout 600
@@ -1484,6 +1484,16 @@ jobs:
           $COMPOSE exec -T api python manage.py shell < .github/scripts/scan_folder_setup.py |
             grep '^{"workspace"' > "$RUNNER_TEMP/scan-setup.json"
           jq -r .workspace "$RUNNER_TEMP/scan-setup.json"
+      - name: The intake service makes and claims the workspace's folder
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if sudo test -f "$RUNNER_TEMP/scan/kantoor/.brievie-werkruimte"; then break; fi
+            sleep 5
+          done
+          sudo test -f "$RUNNER_TEMP/scan/kantoor/.brievie-werkruimte"
+          sudo ln -s "$RUNNER_TEMP/outside/keep.pdf" "$RUNNER_TEMP/scan/kantoor/link.pdf"
+          sudo ln -s "$RUNNER_TEMP/outside/map" "$RUNNER_TEMP/scan/kantoor/map"
       - name: A dropped PDF becomes a letter and leaves the share
         run: |
           set -euo pipefail
@@ -1505,11 +1515,14 @@ jobs:
       - name: Nothing outside the share changed and both links are still there
         run: |
           set -euo pipefail
-          find "$RUNNER_TEMP/outside" -type f -exec sha256sum {} + | sort > "$RUNNER_TEMP/outside-after.txt"
+          sudo find "$RUNNER_TEMP/outside" "$RUNNER_TEMP/scan/hr" -type f -exec sha256sum {} + |
+            sort > "$RUNNER_TEMP/outside-after.txt"
           diff "$RUNNER_TEMP/outside-before.txt" "$RUNNER_TEMP/outside-after.txt"
           sudo test -L "$RUNNER_TEMP/scan/kantoor/link.pdf"
           sudo test -L "$RUNNER_TEMP/scan/kantoor/map"
           ! sudo test -e "$RUNNER_TEMP/scan/kantoor/mislukt/link.pdf"
+          ! sudo test -e "$RUNNER_TEMP/scan/hr/.brievie-werkruimte"
+          ! sudo test -e "$RUNNER_TEMP/scan/hr/mislukt"
           sudo ls -la "$RUNNER_TEMP/scan/kantoor" "$RUNNER_TEMP/scan/kantoor/mislukt"
       - name: Container state on failure
         if: failure()
