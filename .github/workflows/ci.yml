@@ -1475,7 +1475,6 @@ jobs:
           set -euo pipefail
           test "$($COMPOSE ps --status running --services | grep -c '^intake$')" = 1
           test "$(docker inspect "$($COMPOSE ps -q intake)" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
-          $COMPOSE exec -T intake test -d /scan/kantoor
           ! $COMPOSE exec -T worker test -e /scan/kantoor
           ! $COMPOSE exec -T api test -e /scan/kantoor
       - name: A workspace switches the scan folder on

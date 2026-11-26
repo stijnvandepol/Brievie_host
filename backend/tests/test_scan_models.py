@@ -166,7 +166,7 @@ def test_the_api_knows_whether_there_is_a_scan_folder(text: str) -> None:
 
 def test_intake_reaches_only_the_database() -> None:
     # No way out to the internet: a parser taken over by a crafted file cannot send it.
-    assert "networks: [db]" in service(COMPOSE, "intake")
+    assert "networks: [scan]" in service(COMPOSE, "intake")
     assert "networks: [scan]" in service(WRAPPER, "intake")
     assert re.search(r"^  scan:\n    internal: true\n", WRAPPER.split("\nnetworks:\n", 1)[1], re.M)
     assert "networks: [default, scan]" in service(WRAPPER, "postgres")
