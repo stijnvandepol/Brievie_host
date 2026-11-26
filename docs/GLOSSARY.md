@@ -270,7 +270,7 @@ the request that creates the workspace and keep that name.
 | Van buiten bereikbaar | External access | The settings page and the docs section; "away from home" in running text. |
 | publiek adres | public address | The tunnel's or own proxy's name (`BRIEVIE_PUBLIC_HOSTNAME`). |
 | eigen reverse proxy | own reverse proxy | |
-| tunnel (Cloudflare Tunnel) | tunnel (Cloudflare Tunnel) | |
+| tunnel (Cloudflare Tunnel) | tunnel (Cloudflare Tunnel) | Your own, outside Brievie. |
 | Thuisnetwerk | Home network | |
 | Brief toevoegen | Add letter | The web's upload of PDFs and photos (intake). |
 | Document toevoegen | Add document | An own document by upload, with its archive fields. |

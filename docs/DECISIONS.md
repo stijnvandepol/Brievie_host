@@ -3640,3 +3640,37 @@ that is not either.
 - **Observation, not changed:** `list_archive_kind_type` (90-200 ms) walks the workspace the
   same way; `kind` and `document_type` are leakproof, so an index on them would help it
   when it nears the gate.
+
+## 2026-11-26: Remote access is the user's own tool (supersedes the tunnel of PR #53)
+
+Owner decision. Brievie no longer ships or manages a tunnel: remote access is the user's own
+tool (Tailscale, Cloudflare Tunnel, own reverse proxy), set up outside Brievie. Reasons: fewer
+moving parts, no second image to pin and scan, and no secret (the tunnel token) to guard in
+the stack.
+
+- **Removed:** the `cloudflared` service, the `tunnel` network, Caddy's `http://:8080` listener
+  (and its `CF-Connecting-IP` reading), `BRIEVIE_TUNNEL_TOKEN`, `BRIEVIE_TUNNEL_TOKEN_FILE`,
+  the `tunnel` profile and `COMPOSE_PROFILES` handling and the tunnel start in `./brievie`,
+  `BRIEVIE_TUNNEL_TOKEN_SET` in the api, the checks `tunnel_not_seen`,
+  `upload_limit_above_cloudflare`, `cloudflare_reads_along`, `cloudflare_on_https_port` and
+  `brievie.W003`, the CI scan of the cloudflared image and `.trivyignore.cloudflared.yaml`
+  (so the image's CVE ignores go with it), and the CI steps for the token.
+- **Kept, the security core of PR #53:** outside traffic is still told from home traffic, at
+  the one https port. A request for `BRIEVIE_PUBLIC_HOSTNAME`, or with a proxy's headers from
+  an address not in `BRIEVIE_TRUSTED_PROXIES`, is the public route: app only, the web closed
+  unless `BRIEVIE_PUBLIC_WEB` (then the second step is required), pairing 403 `pair_at_home`,
+  an unknown Host fails closed. The hooks are `BRIEVIE_PUBLIC_HOSTNAME`,
+  `BRIEVIE_TRUSTED_PROXIES`, `BRIEVIE_VPN_HOSTNAME` and `BRIEVIE_PUBLIC_WEB`. The Caddy
+  variable `BRIEVIE_TUNNEL_HOST` is now `BRIEVIE_PUBLIC_HOST_MATCH` (internal).
+- **Upgrade:** an install with `BRIEVIE_TUNNEL_TOKEN` (or `_FILE`) still set gets a Dutch message
+  from `./brievie` (its tunnel no longer starts; set up your own and set
+  `BRIEVIE_PUBLIC_HOSTNAME`), never a refused start; a leftover `COMPOSE_PROFILES` line is
+  ignored. `COMPOSE_REVISION` stays 1: a removed service needs no new volume or service.
+- **API:** additive only. `tunnel` stays in `getExternalAccess` (always `token_set: false`,
+  `connected: "not_set"`, now with defaults); the removed check codes were open strings, the
+  web holds the sentences.
+- **Page and docs:** "Van buiten bereikbaar" shows the hooks read-only and links to
+  `https://brievie.com/nl/install/#publieke-toegang` (en: `/en/install/#public-access`);
+  SELFHOST section 25 explains a user's own `cloudflared` (service `https://<server-ip>:<port>`,
+  `noTLSVerify` or the CA, Host kept) and Tailscale on the NAS (`BRIEVIE_VPN_HOSTNAME` is the
+  MagicDNS name).
