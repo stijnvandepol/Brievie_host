@@ -151,8 +151,8 @@
 	}
 	# The name comes from BRIEVIE_PUBLIC_HOST_MATCH, or BRIEVIE_TUNNEL_HOST of an older compose
 	# file that was kept while only the version moved on. Each is a name that resolves
-	# nowhere while unset.
-	@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid} {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}
+	# nowhere while unset (two different ones: Caddy refuses a repeated host).
+	@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid} {$BRIEVIE_TUNNEL_HOST:old-hostname-not-set.invalid}
 	@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
 	@cf_ray header Cf-Ray *
 	@cf_client header Cf-Connecting-Ip *

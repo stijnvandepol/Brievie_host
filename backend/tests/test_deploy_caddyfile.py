@@ -108,7 +108,7 @@ def code(text: str) -> str:
 # review of PR #65).
 OLD_AND_NEW_MATCH = (
     "@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid} "
-    "{$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}"
+    "{$BRIEVIE_TUNNEL_HOST:old-hostname-not-set.invalid}"
 )
 
 
