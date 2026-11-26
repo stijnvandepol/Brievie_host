@@ -21,6 +21,7 @@ SERVICES = (
     "init",
     "api",
     "worker",
+    "intake",
     "keeper",
     "caddy",
     "admin",
@@ -98,7 +99,17 @@ def test_every_service_but_caddy_uses_the_backend_image_by_anchor() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["init-secrets", "postgres", "init", "api", "worker", "keeper", "admin"]
+    "name",
+    [
+        "init-secrets",
+        "postgres",
+        "init",
+        "api",
+        "worker",
+        "intake",
+        "keeper",
+        "admin",
+    ],
 )
 def test_only_caddy_publishes_a_port(name: str) -> None:
     assert "ports:" not in service(name)
@@ -106,8 +117,20 @@ def test_only_caddy_publishes_a_port(name: str) -> None:
 
 
 def test_postgres_is_only_on_the_internal_network() -> None:
-    assert "networks: [db]" in service("postgres")
+    assert "networks: [db, scan]" in service("postgres")
     assert re.search(r"^networks:\n  # .*\n  db:\n    internal: true\n", TEXT, re.M)
+
+
+def test_intake_reaches_postgres_only_and_has_its_own_secrets() -> None:
+    # Security review of PR #64 (M5): not on `db` (which carries the api), no back-up password.
+    block = service("intake")
+    assert "networks: [scan]" in block
+    assert re.search(r"^  scan:\n    internal: true\n", TEXT, re.M)
+    lists = {name: re.findall(r"networks: \[(.*)\]", service(name)) for name in SERVICES}
+    on_scan = [name for name, found in lists.items() if any("scan" in f.split(", ") for f in found)]
+    assert on_scan == ["postgres", "intake"]
+    assert "secrets-api" not in block
+    assert "secrets-intake:/out/intake" in service("init-secrets")
 
 
 def test_the_keeper_has_its_own_secrets_and_no_master_key() -> None:
@@ -118,17 +141,17 @@ def test_the_keeper_has_its_own_secrets_and_no_master_key() -> None:
     assert "MASTER_KEY" not in keeper
 
 
-@pytest.mark.parametrize("name", ["api", "worker"])
+@pytest.mark.parametrize("name", ["api", "worker", "intake"])
 def test_the_api_and_worker_see_neither_the_vault_nor_the_keeper_files(name: str) -> None:
     block = service(name)
-    assert "secrets-api:/run/brievie:ro" in block
+    assert ("secrets-intake" if name == "intake" else "secrets-api") + ":/run/brievie:ro" in block
     assert "secrets-keeper" not in block
     assert not re.search(r"\bsecrets:/", block)
     for name_in_vault in ("OWNER_PASSWORD", "SUPERUSER", "owner_password", "postgres_password"):
         assert name_in_vault not in block
 
 
-@pytest.mark.parametrize("name", ["api", "worker", "keeper"])
+@pytest.mark.parametrize("name", ["api", "worker", "intake", "keeper"])
 def test_the_long_running_services_drop_every_capability(name: str) -> None:
     block = service(name)
     assert "cap_drop: [ALL]" in block

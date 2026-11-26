@@ -41,14 +41,17 @@ UNDOABLE_ORIGINS = (
     DocumentEvent.Origin.AI,
     DocumentEvent.Origin.NAME_MATCH,
     DocumentEvent.Origin.RULE_AUTOPILOT,
+    DocumentEvent.Origin.WATCH_FOLDER,
 )
 # Origins whose links are marked `automatic`: the autopilot put them there. Such a change
 # is undoable only while its link is still `automatic` (a person's confirm takes it over).
-# A rule's label proposal the autopilot applied has its own origin, `rule_autopilot`.
+# A rule's label proposal the autopilot applied has its own origin, `rule_autopilot`. A
+# scan-folder letter's addressee from its folder is `watch_folder` (nobody did it either).
 AUTOMATIC_ORIGINS = (
     DocumentEvent.Origin.AI,
     DocumentEvent.Origin.NAME_MATCH,
     DocumentEvent.Origin.RULE_AUTOPILOT,
+    DocumentEvent.Origin.WATCH_FOLDER,
 )
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL

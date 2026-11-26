@@ -50,6 +50,8 @@ ROLE_FILES: dict[str, tuple[str, ...]] = {
     # there is one; a derived one it can compute from the master key anyway.
     "api": ("secret_key", "app_password", "master_key", "backup_password"),
     "keeper": ("secret_key", "app_password", "backup_db_password", "backup_password"),
+    # The scan folder seals with the master key; it never makes or opens a back-up.
+    "intake": ("secret_key", "app_password", "master_key"),
     # `init` (roles, gate, emergency back-up, migrations) needs every password but never the
     # master key: no migration or back-up step decrypts a document.
     "init": (
@@ -61,6 +63,8 @@ ROLE_FILES: dict[str, tuple[str, ...]] = {
         "backup_password",
     ),
 }
+# Filled only when mounted: a compose file from before the role (0.5.0) has no such volume.
+OPTIONAL_ROLES = frozenset({"intake"})
 INSTALLATION_ID_NAME = "installation-id"
 FILE_MODE = 0o400
 DIRECTORY_MODE = 0o700
@@ -340,7 +344,11 @@ def run(
     a refusal writes nothing."""
     vault = _open_directory(layout.vault)
     config = _open_directory(layout.backup_config)
-    out = {role: _open_directory(path) for role, path in layout.out.items()}
+    out = {
+        role: _open_directory(path)
+        for role, path in layout.out.items()
+        if role not in OPTIONAL_ROLES or os.path.lexists(path)
+    }
     try:
         return _run(layout, environ, vault, config, out, import_values)
     finally:
@@ -476,12 +484,13 @@ CONTAINER_LAYOUT = Layout(
         "api": Path("/out/api"),
         "keeper": Path("/out/keeper"),
         "init": Path("/out/init"),
+        "intake": Path("/out/intake"),
     },
     backup_config=Path("/data/backup-config"),
     documents=Path("/data/documents"),
     pgdata=Path("/var/lib/postgresql"),
     owners={"vault": (10001, 10001), "postgres": (999, 999), "api": (10001, 10001),
-            "keeper": (10001, 10001), "init": (10001, 10001)},
+            "keeper": (10001, 10001), "init": (10001, 10001), "intake": (10001, 10001)},
 )  # fmt: skip
 
 

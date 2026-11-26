@@ -34,6 +34,10 @@ function sentence(
       ? t`Automatisch toegevoegd door regel ${ruleName}: label ${label}`
       : t`Automatisch toegevoegd door een regel: label ${label}`;
   }
+  // A letter from a person's or department's folder of the scan folder (intake S 3.2a).
+  if (event.origin === "watch_folder" && event.kind === "addressee_added") {
+    return t`Automatisch toegevoegd uit de scanmap van ${person}`;
+  }
   if (event.origin === "ai" || event.origin === "name_match") {
     if (event.kind === "label_added") {
       return event.origin === "ai"

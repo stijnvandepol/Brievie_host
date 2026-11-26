@@ -146,6 +146,9 @@ the translation. Add a line before introducing a new domain term.
 | Markeer als gelezen / ongelezen, Alles gelezen | mark read / unread (`markDocumentRead`, `markDocumentUnread`, `markDocumentsRead`) |
 | Blijft liggen, In de Inbox te lang, Nog niet geopend | lingering (`listLingeringLetters`, `lingering_enabled`), too long in the Inbox, not opened (`addressee_opened_at`) |
 | Werkruimte kiezen, Alle werkruimtes | workspace switcher (`/werkruimtes`) |
+| Scanmap | scan folder (`ScanFolderSettings`, `apps.intake.scan_folder`; env `BRIEVIE_SCAN_DIR`; never "inbox", which is Te doen/Inbox) |
+| map per persoon / afdeling | scan subfolder (`ScanFolder`) |
+| mislukt (map) | `mislukt/`, the folder of refused files (`scan_rules.RESERVED`) |
 
 ## English in the interface
 
@@ -187,6 +190,8 @@ the request that creates the workspace and keep that name.
 | Bezig… | Processing… | |
 | termijn, uiterlijk | deadline | Never "term" or "due date"; "Deadline {date}" on a task. Vervaldatum (invoice field) is "Due date". |
 | taak | task | |
+| Scanmap | Scan folder | The folder on the NAS where a scanner drops letters. |
+| Niet meer lezen | Stop reading | A person's or department's folder; nothing on the NAS changes. |
 | werkruimte | workspace | |
 | Thuis / Organisatie | Home / Organisation | The kind of a workspace (`home`, `business`); "Zakelijk" is no longer shown. |
 | lid | member | |

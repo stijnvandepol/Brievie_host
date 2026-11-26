@@ -122,6 +122,18 @@ def set_limits(*, cpu_seconds: int, memory_bytes: int, answer_bytes: int) -> Non
             continue
 
 
+def forbid_new_files() -> None:
+    """After the file is read: no new descriptor at all (`RLIMIT_NOFILE` 0: the open ones keep
+    working, but closing one does not make room for another), so a child taken over by a
+    crafted PDF cannot open a key file, `/proc/<parent>/...`, the share or a socket (security
+    review of PR #64, M2). Only for the page count: rendering may need PDFium's fonts from disk."""
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - not on Linux or macOS
+        return
+    resource.setrlimit(resource.RLIMIT_NOFILE, (0, 0))
+
+
 def _page(page: ParsedPage) -> dict[str, object]:
     return {"jpeg": base64.b64encode(page.jpeg).decode("ascii")}
 
@@ -143,6 +155,8 @@ def main(arguments: list[str]) -> int:
     operation, cpu, memory, answer_bytes, *rest = arguments
     set_limits(cpu_seconds=int(cpu), memory_bytes=int(memory), answer_bytes=int(answer_bytes))
     data = sys.stdin.buffer.read()
+    if operation == "count":
+        forbid_new_files()
     answer = _answer(operation, data, int(rest[0]) if rest else 1)
     sys.stdout.write(json.dumps(answer))
     sys.stdout.flush()

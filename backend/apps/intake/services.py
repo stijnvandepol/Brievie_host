@@ -16,16 +16,28 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import intake, own, reading
+from apps.documents import intake, organise, own, reading, visibility
 from apps.documents import services as document_services
-from apps.documents.models import Document
+from apps.documents.models import Document, DocumentEvent
 from apps.documents.schemas import FileMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
-from apps.intake.files import FileKind, check_file, download_name, safe_original_name
+from apps.intake.files import (
+    CheckedFile,
+    FileKind,
+    check_file,
+    download_name,
+    safe_original_name,
+)
+from apps.people.models import Person
 from apps.pipeline.jobs import defer_processing
 from apps.workspaces.context import system_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Membership, Workspace
+
+
+class PersonGoneError(Exception):
+    """The scan folder's person or department was archived or deleted before the letter
+    was made: nothing is stored, the file goes to `mislukt/` with `person_gone`."""
 
 
 def create_document_from_file(
@@ -38,6 +50,8 @@ def create_document_from_file(
     original_name: str,
     actor: AuditActor | None = None,
     storage: DocumentStorage | None = None,
+    preset_addressee: Person | None = None,
+    checked: CheckedFile | None = None,
 ) -> tuple[Document, bool]:
     """Store `data` as a new document; `True` when it is new.
 
@@ -46,10 +60,20 @@ def create_document_from_file(
     another file under that id is 409, as `createDocument`. With `kind = document` it is
     an own document, checked and organised as `create_document_from_upload` does. Needs
     the workspace's RLS context.
+
+    The scan folder (`scanned_by=None`, intake spec S 3.2a) passes the folder's person or
+    department as `preset_addressee`: it is on the letter, `automatic` with origin
+    `watch_folder` and no actor, in this transaction and before the pipeline is queued, so
+    `addressee_ids` and the readers are synced before anyone can read it. A person archived
+    or deleted by then raises `PersonGoneError`. It also passes `checked`, the result of
+    `check_file` made before its transaction, so no transaction waits for the PDF check.
     """
-    checked = check_file(
-        data, max_bytes=settings.BRIEVIE_MAX_UPLOAD_BYTES, max_pages=settings.BRIEVIE_MAX_PAGES
-    )
+    if checked is None or checked.sha256 != hashlib.sha256(data).hexdigest():
+        checked = check_file(
+            data,
+            max_bytes=settings.BRIEVIE_MAX_UPLOAD_BYTES,
+            max_pages=settings.BRIEVIE_MAX_PAGES,
+        )
     own_data = own.validate_fields(metadata, today=timezone.localdate())
     if own_data is not None and scanned_by is None:
         # Only a member adds an own document; the scan folder makes letters.
@@ -69,6 +93,15 @@ def create_document_from_file(
     written: list[str] = []
     try:
         with transaction.atomic():
+            person = None
+            if preset_addressee is not None:
+                # Read again in this transaction: archived or deleted since the folder
+                # was read, the letter is not made.
+                person = Person.objects.filter(
+                    id=preset_addressee.id, archived_at__isnull=True
+                ).first()
+                if person is None:
+                    raise PersonGoneError
             if own_data is not None and scanned_by is not None:
                 own.lock_creator(workspace, scanned_by)
                 own.check_names(workspace, own_data)
@@ -107,6 +140,11 @@ def create_document_from_file(
                     aad=intake.original_aad(workspace.id, document.id),
                 ),
             )
+            if person is not None:
+                with visibility.addressee_scope(document):
+                    organise.add_addressee(
+                        document, person, actor=None, origin=DocumentEvent.Origin.WATCH_FOLDER
+                    )
             if scanned_by is not None:
                 if own_data is not None:
                     own.create_document(

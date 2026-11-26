@@ -98,7 +98,7 @@ def test_running_services_refuse_before_anything_changes() -> None:
     log.sessions = 2
     assert log.go(replace_data=True) == 1
     assert log.calls == []
-    assert "docker compose stop api worker keeper caddy" in log.complained[0]
+    assert "docker compose stop api worker intake keeper caddy" in log.complained[0]
     assert log.complained[0].endswith("Er is niets veranderd.")
 
 
@@ -249,4 +249,4 @@ def test_the_printed_way_back_is_the_documented_one() -> None:
     assert "admin restore" not in printed
     assert "--profile admin" in printed
     assert "restore_install pre-update-0.5.0 --replace" in printed
-    assert "docker compose stop api worker keeper caddy" in printed
+    assert "docker compose stop api worker intake keeper caddy" in printed

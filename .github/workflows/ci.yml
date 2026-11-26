@@ -1014,7 +1014,7 @@ jobs:
         run: |
           set -euo pipefail
           export BRIEVIE_CI_TAG=$GOOD
-          $COMPOSE stop api worker keeper caddy
+          $COMPOSE stop api worker intake keeper caddy
           # The emergency back-up of the update is in the volume update-backup.
           BRIEVIE_BACKUP_DIR=update-backup $COMPOSE --profile admin run --rm admin \
             python manage.py restore_install "pre-update-$BAD" --replace | tee "$RUNNER_TEMP/way-back.log"
@@ -1123,7 +1123,7 @@ jobs:
           cat "$RUNNER_TEMP/running.log"
           test "$rc" != 0
           grep -q 'draait nog' "$RUNNER_TEMP/running.log"
-          $COMPOSE stop api worker keeper caddy
+          $COMPOSE stop api worker intake keeper caddy
           rc=0
           $COMPOSE --profile admin run --rm admin python manage.py restore_install \
             > "$RUNNER_TEMP/no-replace.log" 2>&1 || rc=$?
@@ -1394,6 +1394,108 @@ jobs:
     uses: ./.github/workflows/audit-failed.yml # zizmor: ignore[self-repository]
     with:
       needs: ${{ toJSON(needs) }}
+
+  # The scan folder's guards on a real share (intake plan Task 15): the `intake` service in
+  # the ./brievie stack with a bind-mounted folder in the runner's temporary directory, owned
+  # by another uid (20000) and the group 100, with a link to a file and a link to a folder
+  # outside it. A PDF dropped in the workspace folder becomes a letter and leaves the share;
+  # nothing outside the share changes and both links stay. Only on a GitHub runner.
+  scan-folder-proof:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose --project-directory deploy -f deploy/docker-compose.yml
+    steps:
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create deploy/.env with fresh secrets
+        run: sh deploy/init-env.sh
+      - name: A share owned by another uid, with links that point outside it
+        run: |
+          set -euo pipefail
+          share="$RUNNER_TEMP/scan"
+          outside="$RUNNER_TEMP/outside"
+          mkdir -p "$share/hr" "$outside/map"
+          python3 .github/scripts/make-test-pdf.py "$outside/keep.pdf" "Blijft buiten de scanmap"
+          python3 .github/scripts/make-test-pdf.py "$outside/map/ook.pdf" "Ook buiten de scanmap"
+          # Another office's folder with a letter in it: never taken in.
+          python3 .github/scripts/make-test-pdf.py "$share/hr/salaris.pdf" "Niet voor Brievie"
+          sudo chown -R 20000:100 "$share"
+          sudo chmod -R 2770 "$share"
+          sudo find "$outside" "$share/hr" -type f -exec sha256sum {} + | sort > "$RUNNER_TEMP/outside-before.txt"
+          echo "BRIEVIE_SCAN_DIR=$share" >> deploy/.env
+      - name: Build and start the stack
+        run: $COMPOSE up -d --build --wait --wait-timeout 600
+      - name: The intake service runs, read-only, and is the only one that sees the share
+        run: |
+          set -euo pipefail
+          test "$($COMPOSE ps --status running --services | grep -c '^intake$')" = 1
+          test "$(docker inspect "$($COMPOSE ps -q intake)" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+          $COMPOSE exec -T intake test -d /scan/hr
+          ! $COMPOSE exec -T worker test -e /scan/hr
+          ! $COMPOSE exec -T api test -e /scan/hr
+      - name: A workspace switches the scan folder on
+        run: |
+          set -euo pipefail
+          $COMPOSE exec -T api python manage.py shell < .github/scripts/scan_folder_setup.py |
+            grep '^{"workspace"' > "$RUNNER_TEMP/scan-setup.json"
+          jq -r .workspace "$RUNNER_TEMP/scan-setup.json"
+      - name: The intake service makes and claims the workspace's folder
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if sudo test -f "$RUNNER_TEMP/scan/kantoor/.brievie-werkruimte"; then break; fi
+            sleep 5
+          done
+          sudo test -f "$RUNNER_TEMP/scan/kantoor/.brievie-werkruimte"
+          sudo ln -s "$RUNNER_TEMP/outside/keep.pdf" "$RUNNER_TEMP/scan/kantoor/link.pdf"
+          sudo ln -s "$RUNNER_TEMP/outside/map" "$RUNNER_TEMP/scan/kantoor/map"
+      - name: A dropped PDF becomes a letter and leaves the share
+        run: |
+          set -euo pipefail
+          workspace=$(jq -r .workspace "$RUNNER_TEMP/scan-setup.json")
+          python3 .github/scripts/make-test-pdf.py "$RUNNER_TEMP/brief.pdf" "Een proefbrief"
+          sudo install -o 20000 -g 100 -m 0660 "$RUNNER_TEMP/brief.pdf" "$RUNNER_TEMP/scan/kantoor/brief.pdf"
+          for _ in $(seq 1 48); do
+            state=$($COMPOSE exec -T -e SCAN_WORKSPACE="$workspace" api python manage.py shell \
+              -c "$(cat .github/scripts/scan-folder-check.py)" | grep '^{"letters"')
+            echo "$state"
+            if [ "$(echo "$state" | jq .letters)" = 1 ] && ! sudo test -e "$RUNNER_TEMP/scan/kantoor/brief.pdf"; then
+              break
+            fi
+            sleep 5
+          done
+          test "$(echo "$state" | jq .letters)" = 1
+          ! sudo test -e "$RUNNER_TEMP/scan/kantoor/brief.pdf"
+          test "$(echo "$state" | jq -r .check)" = ok
+      - name: Nothing outside the share changed and both links are still there
+        run: |
+          set -euo pipefail
+          sudo find "$RUNNER_TEMP/outside" "$RUNNER_TEMP/scan/hr" -type f -exec sha256sum {} + |
+            sort > "$RUNNER_TEMP/outside-after.txt"
+          diff "$RUNNER_TEMP/outside-before.txt" "$RUNNER_TEMP/outside-after.txt"
+          sudo test -L "$RUNNER_TEMP/scan/kantoor/link.pdf"
+          sudo test -L "$RUNNER_TEMP/scan/kantoor/map"
+          ! sudo test -e "$RUNNER_TEMP/scan/kantoor/mislukt/link.pdf"
+          ! sudo test -e "$RUNNER_TEMP/scan/hr/.brievie-werkruimte"
+          ! sudo test -e "$RUNNER_TEMP/scan/hr/mislukt"
+          sudo ls -la "$RUNNER_TEMP/scan/kantoor" "$RUNNER_TEMP/scan/kantoor/mislukt"
+      - name: Container state on failure
+        if: failure()
+        # The intake log holds codes and document ids only; never the api log (installation code).
+        run: |
+          $COMPOSE ps --all || true
+          $COMPOSE logs --no-color intake | tail -n 50 || true
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes || true
 
   # A back-up is only worth something when it restores onto an empty machine. This job
   # makes a server, seeds it, backs it up, destroys everything (containers, volumes,

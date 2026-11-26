@@ -827,9 +827,10 @@ warn_old_tunnel() {
 	return 0
 }
 
-# Stops the named services.
+# Stops the named services. The scan folder's intake service always stops with them: it writes
+# the database and the documents volume, so nothing may run it during a restore or an update.
 compose_stop() {
-	compose stop "$@"
+	compose stop "$@" intake
 }
 
 # The addresses besides the home one, and the warning about the web sign-in on the internet.
@@ -2602,7 +2603,7 @@ cmd_update_finish() {
 	echo "Brievie wordt gestart…"
 	# Caddy (the door for phones and browsers) opens only after the new version answers
 	# well: nothing is written to a version that the way back would throw away.
-	quietly all compose_raw up -d --wait --no-build api worker keeper || finish_failed "Brievie is niet goed gestart."
+	quietly all compose_raw up -d --wait --no-build api worker keeper intake || finish_failed "Brievie is niet goed gestart."
 	compose exec -T api python manage.py check_health --expect-version "$finish_to" ||
 		finish_failed "Brievie antwoordt niet goed na het bijwerken."
 	quietly all compose_raw up -d --wait --no-build caddy || finish_failed "Caddy is niet goed gestart."

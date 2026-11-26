@@ -155,14 +155,14 @@ IMAGE = "image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}"
 def test_every_service_takes_the_backend_image_from_the_version() -> None:
     # ./brievie always sets BRIEVIE_IMAGE (from the version, or the user's own); the
     # default only serves a hand `docker compose`, make dev and CI.
-    for name in ("api", "migrate", "worker", "keeper", "admin"):
+    for name in ("api", "migrate", "worker", "intake", "keeper", "admin"):
         assert IMAGE in service(name), name
     assert "brievie/backend:" not in COMPOSE.replace(IMAGE, "")
 
 
 def test_worker_and_keeper_get_a_minute_to_stop() -> None:
     # An update stops them: a job cut off is picked up again by the retry of stalled jobs.
-    for name in ("worker", "keeper"):
+    for name in ("worker", "intake", "keeper"):
         assert "stop_grace_period: 1m" in service(name), name
 
 
@@ -172,7 +172,7 @@ def test_the_update_fallback_is_a_volume_no_service_mounts() -> None:
     # but the update's own prunes it.
     volumes = COMPOSE.split("\nvolumes:\n", 1)[1]
     assert "  update-backup:" in volumes.splitlines()
-    for name in ("api", "migrate", "worker", "keeper", "admin", "caddy", "postgres"):
+    for name in ("api", "migrate", "worker", "intake", "keeper", "admin", "caddy", "postgres"):
         assert "update-backup" not in service(name), name
 
 
@@ -268,7 +268,7 @@ def test_admin_mounts_the_documents_volume() -> None:
 
 
 def test_migrate_still_runs_before_every_app_container() -> None:
-    for name in ("api", "worker", "keeper"):
+    for name in ("api", "worker", "intake", "keeper"):
         assert re.search(
             r"migrate:\n\s+condition: service_completed_successfully", service(name)
         ), name

@@ -53,7 +53,8 @@ def test_document_upload_has_its_own_body_limit() -> None:
 
 
 def test_compose_passes_the_upload_limit_to_caddy_and_api() -> None:
-    assert COMPOSE.count("BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}") == 2
+    # Caddy, the api, and the scan folder's intake service (which checks files too).
+    assert COMPOSE.count("BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}") == 3
 
 
 def test_proxy_errors_use_the_error_shape() -> None:

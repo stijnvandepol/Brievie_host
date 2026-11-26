@@ -622,6 +622,9 @@ class DocumentEvent(WorkspaceModel):
         # The server did it on nobody's behalf: an assignment released because the
         # assignee may no longer read the letter.
         SYSTEM = "system"
+        # The letter came from a person's or department's folder of the scan folder, which
+        # made them its addressee (intake spec S 3.2a); undoable like the autopilot's.
+        WATCH_FOLDER = "watch_folder"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)

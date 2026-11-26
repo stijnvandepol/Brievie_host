@@ -1829,7 +1829,7 @@ msgstr "We can't find this suggestion."
 msgid "Een document staat op naam van hoogstens %(max)d personen."
 msgstr "A document is addressed to at most %(max)d persons."
 
-#: apps/documents/organise.py apps/people/accounts.py apps/people/services.py apps/workspaces/invitations.py
+#: apps/documents/organise.py apps/intake/scan_api.py apps/people/accounts.py apps/people/services.py apps/workspaces/invitations.py
 msgid "We kunnen deze persoon niet vinden."
 msgstr "We can't find this person."
 
@@ -1981,7 +1981,7 @@ msgstr "We don't know this kind of letter."
 msgid "De begindatum moet vóór de einddatum liggen."
 msgstr "The start date must be before the end date."
 
-#: apps/documents/services.py
+#: apps/documents/services.py apps/intake/scan_api.py
 msgid "We kunnen deze map niet vinden."
 msgstr "We can't find this folder."
 
@@ -2213,8 +2213,8 @@ msgid "Brievie %(version)s is klaar om te starten."
 msgstr "Brievie %(version)s is ready to start."
 
 #: apps/installer/restore_install.py
-msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker keeper caddy. Er is niets veranderd."
-msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker keeper caddy. Nothing has changed."
+msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker intake keeper caddy. Er is niets veranderd."
+msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker intake keeper caddy. Nothing has changed."
 
 #: apps/installer/restore_install.py
 msgid "Er staan al gegevens in deze installatie. Wil je ze vervangen door de back-up? Typ het commando opnieuw met --replace. Er is niets veranderd."
@@ -2313,6 +2313,62 @@ msgstr "This PDF is protected with a password. Remove the protection and try aga
 #: apps/intake/api.py
 msgid "Deze afbeelding is te groot. Maak een kleinere foto of scan."
 msgstr "This image is too large. Take a smaller photo or scan."
+
+#: apps/intake/scan_api.py
+msgid "Deze server heeft geen scanmap. Vraag de serverbeheerder om er een in te stellen."
+msgstr "This server has no scan folder. Ask the server administrator to set one up."
+
+#: apps/intake/scan_api.py
+msgid "Een andere werkruimte gebruikt deze mapnaam al. Kies een andere naam."
+msgstr "Another workspace already uses this folder name. Choose another name."
+
+#: apps/intake/scan_api.py
+msgid "Deze mapnaam kan niet. Gebruik kleine letters, cijfers en streepjes."
+msgstr "This folder name is not possible. Use lower case letters, digits and hyphens."
+
+#: apps/intake/scan_api.py
+msgid "Een andere persoon of afdeling heeft al een map met deze naam."
+msgstr "Another person or department already has a folder with this name."
+
+#: apps/intake/scan_api.py
+msgid "Afdelingen staan uit. Zet ze eerst aan om een map voor een afdeling te maken."
+msgstr "Departments are off. Switch them on first to make a folder for a department."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is geen PDF, JPG of PNG."
+msgstr "Brievie could not read this file: it is not a PDF, JPG or PNG."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is te groot."
+msgstr "Brievie could not read this file: it is too large."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de PDF heeft te veel pagina's."
+msgstr "Brievie could not read this file: the PDF has too many pages."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de PDF is beveiligd met een wachtwoord."
+msgstr "Brievie could not read this file: the PDF is protected with a password."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is beschadigd of onvolledig."
+msgstr "Brievie could not read this file: it is damaged or incomplete."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de afbeelding is te groot."
+msgstr "Brievie could not read this file: the image is too large."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie heeft dit bestand niet opgehaald: de persoon of afdeling van deze map is er niet meer. Zet het bestand in een andere map."
+msgstr "Brievie did not take in this file: the person or department of this folder is no longer there. Put the file in another folder."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet verwerken."
+msgstr "Brievie could not process this file."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie heeft dit bestand niet opgehaald: het bleef leeg of veranderde een uur lang."
+msgstr "Brievie did not take in this file: it stayed empty or kept changing for an hour."
 
 #: apps/intake/services.py
 msgid "Er is te weinig ruimte op de server om dit bestand te bewaren. Vraag de beheerder."

@@ -3674,3 +3674,145 @@ the stack.
   SELFHOST section 25 explains a user's own `cloudflared` (service `https://<server-ip>:<port>`,
   `noTLSVerify` or the CA, Host kept) and Tailscale on the NAS (`BRIEVIE_VPN_HOSTNAME` is the
   MagicDNS name).
+
+## 2026-11-26: Intake phase 2, the scan folder
+
+Spec `docs/superpowers/specs/2026-11-20-inname-zonder-iphone-design.md` S 3, plan
+`docs/superpowers/plans/2026-11-20-host-inname-zonder-iphone.md` Tasks 9-15. No new
+dependency (only the standard library's `os` on top of phase 1).
+
+### The owner's decisions (binding)
+
+- A letter from someone's folder goes straight to that person or department (preset
+  addressee, `automatic`, history origin `watch_folder`, no actor, undoable), not as a
+  proposal. No per-folder "privé" switch in v1.
+- A folder that maps to nobody is never read and nothing in it is moved or removed; the
+  Scanmap page lists it with its number of files. Brievie never makes a person from a name.
+- Every person with an account and every department (while departments are on) gets a
+  folder; others only when an admin makes one ("Map maken"), also inactive ones.
+- Naming: `scan` everywhere in code (`BRIEVIE_SCAN_DIR`, `ScanFolderSettings`,
+  `getScanFolder`); "inbox" is Te doen/Inbox.
+
+### Rulings of the spec, as built
+
+- **Remove after a verified import, no `verwerkt/` folder.** The file is removed only after
+  the letter's transaction committed and the sealed original read back to the same SHA-256;
+  a crash in between makes the next round remove it (the row is already `imported`, the
+  client id `uuid5(workspace, path, sha256, mtime)` would answer the same letter).
+- **A separate `intake` service** (same image, queue `intake`), the only one that mounts the
+  share, so a stuck SMB mount cannot stall the pipeline and the worker never sees the share.
+- `mislukt/` is never moved or removed by Brievie; a file put back is tried again (its old
+  row moved with it to its `mislukt/` path).
+
+### Rulings made while building
+
+- **The `intake` service is locked down beyond the plan:** read-only root filesystem with a
+  64 MB tmpfs on `/tmp` (the PDF check's answer file), `cap_drop: [ALL]`,
+  `no-new-privileges`, and a network that reaches PostgreSQL only: the compose-only file's
+  internal `db` network, and in the wrapper's file a new internal network `scan` that only
+  `intake` and `postgres` join. A parser taken over by a crafted file cannot reach the
+  internet. It keeps uid 10001 (it writes the `documents` volume, owned by 10001) and gets
+  the share's group with `group_add` (`BRIEVIE_SCAN_GID`, default 100).
+- **`COMPOSE_REVISION` stays 1.** The service is optional (off unless `BRIEVIE_SCAN_DIR` is
+  set); raising the revision would refuse every 0.5.0 compose file on the new image. A
+  compose user who keeps the old file has no `intake` service and the page says the server
+  has no scan folder. Owner to confirm.
+- **Every stop list includes `intake`:** `./brievie`'s `compose_stop` (restore and update),
+  the update's start, `restore_install`'s `docker compose stop api worker intake keeper
+  caddy` (it writes the database and the documents volume).
+- **`intake_scanfile` follows its letter:** it has a key to `documents_document`, so it gets
+  the restrictive visibility policies of every child table (a row without a letter stays
+  visible); the job runs as the system, an admin's status page sees what they may.
+- **The file is checked before the transaction** (`create_document_from_file(...,
+  checked=...)`), so no transaction waits for the PDF check; the preset person is read
+  again inside the letter's transaction (`PersonGoneError` → `mislukt/` with
+  `person_gone`).
+- **Paused folders are recorded but never read:** a department's files while departments
+  are off get `seen` rows (size and time only) so the page can count them; they are taken
+  as soon as departments are on again.
+- **Logs hold codes, counts and document ids only;** the file's path is stored exactly in
+  `ScanFile.relative_path` (to find it again) and shown nowhere; names on the page are
+  BSN-masked. Audit rows: `workspace_setting_changed` with `scan_folder`,
+  `scan_folder_per_person` (true/false) and `scan_folder_person` (added/removed); no name.
+- **Endpoints** `getScanFolder`, `updateScanFolder`, `addScanFolder`, `removeScanFolder`:
+  web session only, admins, closed on the public route. `suggested_name` (from the
+  workspace's name) was added so the page can offer a name before one is stored.
+- **The web page lives at `/w/<id>/instellingen/scanmap`** (Dutch like the other settings
+  pages), file `routes/scan-folder.tsx`, linked from Instellingen for admins when the server
+  has a scan folder.
+- **Files Brievie writes on the share** (the reason file, the placeholder of a move, the
+  probe, the claim) are 0600 (CodeQL): removing them needs rights on the folder only. On a
+  plain Linux share the office cannot open a `.reden.txt` then; on a Synology the folder's
+  inherited ACL decides. The Scanmap page lists every reason, so nothing is lost.
+- **Proof in a container:** CI job `scan-folder-proof` runs the wrapper stack with a share
+  owned by uid 20000 and group 100, a link to a file and a link to a folder outside it; a
+  dropped PDF becomes a letter and leaves the share, nothing outside changes and both links
+  stay.
+
+### Final review of the branch (fresh reviewer, before the PR left draft)
+
+Fixed, each with a test: a workspace folder is claimed with `.brievie-werkruimte` (the
+workspace id, O_EXCL), so a name freed by a rename or a deleted workspace never lets another
+workspace read the files left there (check `taken`); a long file name no longer blocks a
+workspace (the name in `mislukt/` is cut to fit 255 bytes with its reason file, and an
+error there is a refusal, not a crash); a name that is not UTF-8 is skipped and any error
+stops one workspace's round only; a file the service may not read (mode 000, a hard link)
+goes to `mislukt/` as `unreadable` and only taken or moved files count against the 20 per
+round; an imported source whose letter was purged is left alone; a removal that fails is
+tried again after an hour, not every minute; an imported row whose file is gone gets
+`removed_at` (and is purged after 30 days); folder names are compared with `casefold()` in
+the service as in the job. Left (minor): the check-then-unlink window of `remove_imported`
+(a file swapped under the same name in that instant is removed; a rename-aside would close
+it), rows under a previous folder name are not purged.
+
+### Left for later
+
+- A real Synology: whether a DSM ACL for `users` is honoured for gid 100 in a container,
+  and whether the scanner's files can be removed by that group (SELFHOST 11b).
+- "Post in deze map is privé" and a proposal mode per folder (spec S 3.2a), if asked.
+- The pipeline's own parser isolation (its own uid or container) is still the follow-up of
+  the PR #58 review; the `intake` service now checks scan-folder files without internet.
+
+### Security review of PR #64 (2026-11-26)
+
+An independent review found one high and five medium points; the owner ruled on each.
+
+- **H1: a killed round no longer stops the scan folder.** `scan_folders` runs under a lock;
+  a round of a worker that was killed stayed `doing` and held it for ever.
+  `retry_stalled_intake_jobs` (queue `intake`, every 5 minutes, without that lock) gives
+  stalled jobs back, as the pipeline and back-up queues do.
+- **M1: one odd file never stops a round.** Device, inode, size and mtime are stored as
+  signed 64-bit numbers (`scan_files.int8`: an unsigned 64-bit inode keeps its bits, an mtime
+  past 2262 is clamped); each row is saved in its own savepoint; a path longer than the column
+  is skipped. Skipped files are counted (`skipped_count`) and a round that breaks off sets the
+  check to `failing`, so the page no longer says "De scanmap werkt." while nothing comes in.
+- **M3, owner's ruling: a workspace's folder is a directory Brievie makes itself, or an
+  existing directory that is empty** (a NAS's own `@eaDir`, `#recycle` and dot files aside).
+  Anything else is never claimed, nothing is written in it, and the page says
+  "Er bestaat al een map met deze naam en er staat iets in." The claim is checked before
+  `mislukt/` or the probe file is made. A changed folder name is audited
+  (`workspace_setting_changed`, `setting=scan_folder_name`, `value=changed`, never the name);
+  linking a person or department to a folder is audited as before (`scan_folder_person`).
+  This narrows spec S 3.2a ("an existing directory with exactly the expected name is
+  adopted") for the workspace folder; inside a workspace's own claimed folder, an existing
+  person's folder is still adopted and "Koppel aan" still links an unknown one.
+- **M4: a round is bounded.** At most 500 candidates per folder and 2000 waiting rows per
+  workspace are looked at (the rest is counted); a row is written only when it changed; a
+  file that stays empty or keeps changing for an hour goes to `mislukt/` (`never_settled`);
+  imports wait while 50 scan letters of the workspace are still being read.
+- **M5: the compose-only file isolates `intake` as the wrapper's does:** its own internal
+  network `scan` with PostgreSQL only (not the shared `db` network that carries the api), and
+  its own secrets volume `secrets-intake` with the secret key (the api's: it serves no
+  request), the app password and the master key, no back-up password. `init_secrets` fills
+  it only when it is mounted, so a compose file without it (0.5.0) keeps working;
+  `COMPOSE_REVISION` stays 1.
+- **M2, accepted risk:** PDFium counts the pages of a file from the share inside the `intake`
+  container, which holds the master key (to seal the original). A child taken over by a
+  crafted PDF runs as the same uid. Cheap hardening done: the page-count child can open no
+  new file at all (`RLIMIT_NOFILE` set to 0 after it read the file: open descriptors keep working, closing one
+  makes no room for another),
+  so it cannot read `/run/brievie/master_key` or open a socket; the parent was already not
+  dumpable, so `/proc/<parent>/environ` is closed. It can still write to its answer file and
+  use the memory it has. "No internet" is no barrier on its own: the share is writable.
+  **Follow-up, before a business roll-out: the parser in its own container without keys and
+  without network.**

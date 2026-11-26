@@ -950,6 +950,17 @@ def test_the_finish_checks_health_before_caddy_opens_the_door(
     assert not any(
         c.endswith("up -d --wait --no-build") for c in update_install.commands()[migrate:]
     )
+    # The scan folder's service runs the new version too (intake plan Task 9).
+    assert update_install.has("up -d --wait --no-build api worker keeper intake")
+
+
+def test_the_update_stops_the_scan_folder_service_with_the_others(
+    update_install: UpdateInstall,
+) -> None:
+    result = update_install.run("update")
+
+    assert result.returncode == 0, result.stderr
+    assert update_install.has("stop api worker caddy intake")
 
 
 def known_migrations(install: UpdateInstall) -> None:

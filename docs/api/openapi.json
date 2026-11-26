@@ -4694,6 +4694,224 @@
         "title": "RuleTestOut",
         "type": "object"
       },
+      "ScanFailureOut": {
+        "properties": {
+          "failed_at": {
+            "format": "date-time",
+            "title": "Failed At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "reason",
+          "failed_at"
+        ],
+        "title": "ScanFailureOut",
+        "type": "object"
+      },
+      "ScanFolderIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "folder_name": {
+            "default": "",
+            "title": "Folder Name",
+            "type": "string"
+          },
+          "per_person": {
+            "default": false,
+            "title": "Per Person",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ScanFolderIn",
+        "type": "object"
+      },
+      "ScanFolderOut": {
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "check": {
+            "default": "unknown",
+            "title": "Check",
+            "type": "string"
+          },
+          "departments_enabled": {
+            "default": false,
+            "title": "Departments Enabled",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/ScanFailureOut"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "folder_name": {
+            "default": "",
+            "title": "Folder Name",
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/ScanSubfolderOut"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "oldest_waiting_minutes": {
+            "default": 0,
+            "title": "Oldest Waiting Minutes",
+            "type": "integer"
+          },
+          "owner_gid": {
+            "default": 0,
+            "title": "Owner Gid",
+            "type": "integer"
+          },
+          "owner_uid": {
+            "default": 0,
+            "title": "Owner Uid",
+            "type": "integer"
+          },
+          "per_person": {
+            "default": false,
+            "title": "Per Person",
+            "type": "boolean"
+          },
+          "skipped_count": {
+            "default": 0,
+            "title": "Skipped Count",
+            "type": "integer"
+          },
+          "suggested_name": {
+            "default": "",
+            "title": "Suggested Name",
+            "type": "string"
+          },
+          "unknown_folders": {
+            "items": {
+              "$ref": "#/components/schemas/ScanUnknownFolderOut"
+            },
+            "title": "Unknown Folders",
+            "type": "array"
+          },
+          "waiting_count": {
+            "default": 0,
+            "title": "Waiting Count",
+            "type": "integer"
+          }
+        },
+        "title": "ScanFolderOut",
+        "type": "object"
+      },
+      "ScanSubfolderIn": {
+        "properties": {
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "person_id": {
+            "format": "uuid",
+            "title": "Person Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_id"
+        ],
+        "title": "ScanSubfolderIn",
+        "type": "object"
+      },
+      "ScanSubfolderOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "person_id": {
+            "format": "uuid",
+            "title": "Person Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_name": {
+            "default": "",
+            "title": "Person Name",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "waiting_count": {
+            "default": 0,
+            "title": "Waiting Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state"
+        ],
+        "title": "ScanSubfolderOut",
+        "type": "object"
+      },
+      "ScanUnknownFolderOut": {
+        "properties": {
+          "files": {
+            "default": 0,
+            "title": "Files",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ScanUnknownFolderOut",
+        "type": "object"
+      },
       "SecondFactorCodeIn": {
         "properties": {
           "code": {
@@ -18941,6 +19159,410 @@
         "summary": "Run Rule",
         "tags": [
           "rules"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/scan-folder": {
+      "get": {
+        "description": "The workspace's scan folder: whether the server has one, the switch, the folder's name, the intake service's check, what waits and what failed, and the folders per person or department. Web session only: a bearer token answers 401 not_authenticated. Administrators only.",
+        "operationId": "getScanFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanFolderOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Scan Folder",
+        "tags": [
+          "scan-folder"
+        ]
+      },
+      "put": {
+        "description": "Switch the scan folder and its folders per person on or off and name the workspace's folder (empty: keep the name, or the suggested one). 409 `scan_folder_unavailable` when the server has no scan folder, `scan_folder_taken` when another workspace uses the name; 422 `validation_error` for a name that is not lower case letters, digits and `-`. Web session only: a bearer token answers 401 not_authenticated. Administrators only.",
+        "operationId": "updateScanFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanFolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanFolderOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Scan Folder",
+        "tags": [
+          "scan-folder"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/scan-folder/folders": {
+      "post": {
+        "description": "A folder for a person or department (\"Map maken\"), also one without an account; with `name` an unknown folder of that name becomes theirs (\"Koppel aan\"). A stopped folder is read again. 404 `person_not_found`; 409 `scan_subfolder_taken` when another has that name (case ignored), `scan_folder_departments_off` for a department while departments are off. Web session only: a bearer token answers 401 not_authenticated. Administrators only.",
+        "operationId": "addScanFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanSubfolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanFolderOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Add Scan Folder",
+        "tags": [
+          "scan-folder"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/scan-folder/folders/{folder_id}": {
+      "delete": {
+        "description": "Stop reading a person's or department's folder (\"Niet meer lezen\"). The folder and its files stay on the share; it is then listed as an unknown folder. 404 `scan_folder_not_found`. Web session only: a bearer token answers 401 not_authenticated. Administrators only.",
+        "operationId": "removeScanFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "folder_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Folder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanFolderOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Remove Scan Folder",
+        "tags": [
+          "scan-folder"
         ]
       }
     },
