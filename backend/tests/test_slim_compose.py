@@ -89,11 +89,8 @@ def test_the_settings_that_stay_are_still_there() -> None:
     ):
         assert text in OUT, text
     assert OUT.count("BRIEVIE_HOSTNAME: &hostname") == 1
-    assert re.search(r'BRIEVIE_COMPOSE_REVISION: "(\d+)"', OUT)
-    assert (
-        re.search(r'BRIEVIE_COMPOSE_REVISION: "(\d+)"', OUT)[1]
-        == re.search(r'BRIEVIE_COMPOSE_REVISION: "(\d+)"', SOURCE)[1]
-    )
+    revision = r'BRIEVIE_COMPOSE_REVISION: "(\d+)"'
+    assert re.findall(revision, OUT) == re.findall(revision, SOURCE) != []
 
 
 def test_services_networks_and_volumes_are_those_of_the_full_file() -> None:
