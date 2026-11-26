@@ -2318,6 +2318,38 @@ msgstr "This PDF is protected with a password. Remove the protection and try aga
 msgid "Deze afbeelding is te groot. Maak een kleinere foto of scan."
 msgstr "This image is too large. Take a smaller photo or scan."
 
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is geen PDF, JPG of PNG."
+msgstr "Brievie could not read this file: it is not a PDF, JPG or PNG."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is te groot."
+msgstr "Brievie could not read this file: it is too large."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de PDF heeft te veel pagina's."
+msgstr "Brievie could not read this file: the PDF has too many pages."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de PDF is beveiligd met een wachtwoord."
+msgstr "Brievie could not read this file: the PDF is protected with a password."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: het is beschadigd of onvolledig."
+msgstr "Brievie could not read this file: it is damaged or incomplete."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet lezen: de afbeelding is te groot."
+msgstr "Brievie could not read this file: the image is too large."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie heeft dit bestand niet opgehaald: de persoon of afdeling van deze map is er niet meer. Zet het bestand in een andere map."
+msgstr "Brievie did not take in this file: the person or department of this folder is no longer there. Put the file in another folder."
+
+#: apps/intake/scan_folder.py
+msgid "Brievie kon dit bestand niet verwerken."
+msgstr "Brievie could not process this file."
+
 #: apps/intake/services.py
 msgid "Er is te weinig ruimte op de server om dit bestand te bewaren. Vraag de beheerder."
 msgstr "There is too little space on the server to keep this file. Ask the admin."

@@ -29,6 +29,9 @@ ALLOWED_SYSTEM_CALLERS = {
     # Intake: the pipeline's first step reads and writes the uploaded file's pages.
     "apps/intake/prepare.py",
     "apps/intake/services.py",
+    # The scan folder's job is nobody: it reads the workspace's persons and folders, makes
+    # the letter and reads its original back as the system (intake spec S 3.6).
+    "apps/intake/scan_folder.py",
     # The purge of the trash reaches every trashed letter and its reader rows (it marks
     # what expired and deletes marked letters); the request paths of the trash never do.
     "apps/documents/purge.py",
