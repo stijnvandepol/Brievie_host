@@ -484,7 +484,7 @@ def test_an_existing_empty_folder_may_be_claimed(root_fd: int, scan_root: Path) 
     assert claim_folder(root_fd, ("kantoor",), "werkruimte-een") == "ours"
 
 
-@pytest.mark.parametrize("content", ["brief.pdf", "notitie.txt", "Map"])
+@pytest.mark.parametrize("content", ["brief.pdf", "notitie.txt", "Map", "#1.pdf", "@scan.pdf"])
 def test_an_existing_folder_with_anything_in_it_is_not_claimed(
     root_fd: int, scan_root: Path, content: str
 ) -> None:

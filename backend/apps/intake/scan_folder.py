@@ -424,6 +424,13 @@ def _record(
                 row.document = None
                 row.removed_at = None
                 row.first_seen_at = now
+            if (
+                not changed
+                and previous != current
+                and now - (row.first_seen_at or now) >= NEVER_SETTLED_AFTER
+            ):
+                # Written again after the wait: another settle period, not `mislukt/` at once.
+                row.first_seen_at = now
             take, since = stable(
                 previous,
                 row.stable_since,

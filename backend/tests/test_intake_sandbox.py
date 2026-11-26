@@ -190,6 +190,10 @@ def _limited(statement: str, *, cpu: int = 30, memory: int = 256 * 1024 * 1024) 
         f"open({str(Path(__file__))!r}, 'rb')",
         "import socket; socket.socket()",
         "import os; os.open('/proc/self/environ', os.O_RDONLY)",
+        # Closing a descriptor first must not make room for another.
+        f"import os; os.close(0); open({str(Path(__file__))!r}, 'rb')",
+        "import os; os.close(0); os.close(2); os.open('/proc/self/environ', os.O_RDONLY)",
+        "import os, socket; os.close(0); socket.socket()",
     ],
 )
 def test_the_counting_child_can_open_nothing_new(statement: str) -> None:

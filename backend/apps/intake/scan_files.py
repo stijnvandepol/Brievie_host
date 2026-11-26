@@ -112,6 +112,10 @@ class ProbeResult:
     owner_gid: int
 
 
+# A NAS's own folders: they do not make a folder "not empty" (a file named `#1.pdf` does).
+_NAS_OWN_NAMES = frozenset({"@eaDir", "#recycle", "#snapshot", "@Recycle", "@tmp"})
+
+
 def valid_name(name: str) -> bool:
     """One name of a path: not empty, not `.` or `..`, no `/` or NUL, and valid UTF-8 (a
     name from an old scanner in another encoding cannot be stored; it is left alone)."""
@@ -515,7 +519,9 @@ def claim_folder(root_fd: int, folder: RelPath, owner: str) -> str:
                 return "ours" if os.read(existing, _CLAIM_MAX + 1) == expected else "taken"
             finally:
                 os.close(existing)
-        if not made and any(not name.startswith((".", "@", "#")) for name in os.listdir(fd)):
+        if not made and any(
+            not (name.startswith(".") or name in _NAS_OWN_NAMES) for name in os.listdir(fd)
+        ):
             return "not_empty"
         try:
             claim = os.open(_CLAIM_NAME, _NEW_FILE_FLAGS, _PRIVATE_MODE, dir_fd=fd)

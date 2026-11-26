@@ -3775,7 +3775,8 @@ An independent review found one high and five medium points; the owner ruled on 
 - **M2, accepted risk:** PDFium counts the pages of a file from the share inside the `intake`
   container, which holds the master key (to seal the original). A child taken over by a
   crafted PDF runs as the same uid. Cheap hardening done: the page-count child can open no
-  new file at all (`RLIMIT_NOFILE` set to the descriptors it holds, after it read the file),
+  new file at all (`RLIMIT_NOFILE` set to 0 after it read the file: open descriptors keep working, closing one
+  makes no room for another),
   so it cannot read `/run/brievie/master_key` or open a socket; the parent was already not
   dumpable, so `/proc/<parent>/environ` is closed. It can still write to its answer file and
   use the memory it has. "No internet" is no barrier on its own: the share is writable.

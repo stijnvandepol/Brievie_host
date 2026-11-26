@@ -3,6 +3,7 @@ alone mounts the share, serves this queue."""
 
 from procrastinate import JobContext
 from procrastinate.contrib.django import app
+from procrastinate.jobs import Status
 
 from apps.intake.scan_folder import scan_round
 
@@ -19,8 +20,10 @@ def scan_folders(timestamp: int) -> None:
 
 @app.periodic(cron="*/5 * * * *")
 # Without the round's lock: a round of a worker that was killed stays `doing` and holds that
-# lock, so no later round would start (security review of PR #64, H1). Given back, the lock
-# frees and the round runs again; it is safe to repeat.
+# lock, so no later round would start (security review of PR #64, H1). The stalled round is
+# closed as failed, not retried: the next round already waits with the same queueing lock,
+# and a retry would be a second `todo` row with it (the unique index refuses). Closed, the
+# lock frees and the waiting round runs; a round is periodic and safe to lose.
 @app.task(
     name="retry_stalled_intake_jobs",
     queue=QUEUE,
@@ -28,5 +31,9 @@ def scan_folders(timestamp: int) -> None:
     queueing_lock="retry_stalled_intake_jobs",
 )
 async def retry_stalled_intake_jobs(context: JobContext, timestamp: int) -> None:
-    for job in await context.app.job_manager.get_stalled_jobs(queue=QUEUE):
-        await context.app.job_manager.retry_job(job)
+    manager = context.app.job_manager
+    for job in await manager.get_stalled_jobs(queue=QUEUE):
+        if job.task_name == "scan_folders":
+            await manager.finish_job(job, Status.FAILED, delete_job=False)
+        else:
+            await manager.retry_job(job)

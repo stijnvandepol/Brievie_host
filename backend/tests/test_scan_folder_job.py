@@ -502,6 +502,18 @@ def test_an_empty_file_goes_to_mislukt_after_an_hour(share: Path) -> None:
     assert [(row.state, row.reason) for row in files(world)] == [("failed", "never_settled")]
 
 
+def test_a_file_written_again_after_the_wait_gets_another_period(share: Path) -> None:
+    world = make_world(per_person=False)
+    path = put(share, "kantoor", "leeg.pdf", data=b"")
+    scan_round(now=at(0))
+    os.utime(path, ns=(1, 2))  # written again: its time changed
+    scan_round(now=at(3700))
+    assert path.exists()
+    assert [row.state for row in files(world)] == ["seen"]
+    scan_round(now=at(7500))
+    assert (share / "kantoor" / "mislukt" / "leeg.pdf").exists()
+
+
 def test_an_unchanged_waiting_row_is_not_written_again(share: Path) -> None:
     world = make_world()
     scan_round(now=at(0))
