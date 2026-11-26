@@ -1,7 +1,6 @@
-"""./brievie and the names of the ways in from outside, and what an old tunnel setting gets (S 10)."""
+"""./brievie, the names of the ways in from outside, and an old tunnel setting (S 10)."""
 
 import secrets
-import subprocess
 from pathlib import Path
 
 import pytest
