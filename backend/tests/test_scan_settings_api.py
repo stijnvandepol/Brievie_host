@@ -277,6 +277,7 @@ def test_waiting_and_failed_come_from_the_rows(ws_b: Workspace) -> None:
         )
         status = scan_folder_status(ws_b.id, now=now + timedelta(minutes=90))
     assert status.waiting_count == 2
+    assert status.skipped_count == 0
     assert status.oldest_waiting_minutes >= 89
     assert [(f.name, f.reason) for f in status.failed] == [("drie.pdf", "file_encrypted")]
 

@@ -253,6 +253,10 @@ msgstr "{rest} and {last}"
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# second} other {# seconds}}"
 
+#: src/routes/scan-folder.tsx
+msgid "{skipped, plural, one {Brievie heeft # bestand in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van het bestand past niet.} other {Brievie heeft # bestanden in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van een bestand past niet.}}"
+msgstr "{skipped, plural, one {Brievie skipped # file in the scan folder: there are too many files, or the file's name or date does not fit.} other {Brievie skipped # files in the scan folder: there are too many files, or a file's name or date does not fit.}}"
+
 #: src/components/rule-sentence.ts
 msgid "{subject} {quoted} bevat"
 msgstr "{subject} contains {quoted}"
@@ -1233,6 +1237,10 @@ msgstr "Arrived as an upload"
 msgid "Blauw"
 msgstr "Blue"
 
+#: src/routes/scan-folder.tsx
+msgid "Bleef leeg of veranderde steeds"
+msgstr "Stayed empty or kept changing"
+
 #: src/routes/inbox.tsx
 #: src/routes/settings.tsx
 msgid "Blijft liggen"
@@ -1386,6 +1394,10 @@ msgstr "Set up Brievie"
 #: src/routes/scan-folder.tsx
 msgid "Brievie kan de scanmap niet lezen. Geef de groep 'users' lees- en schrijfrechten op deze map."
 msgstr "Brievie cannot read the scan folder. Give the group 'users' read and write rights on this folder."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie kon de scanmap de laatste keer niet helemaal lezen. Er komen nu geen brieven binnen. Vraag de serverbeheerder om in het logboek van de dienst intake te kijken."
+msgstr "Brievie could not read all of the scan folder the last time. No letters are coming in now. Ask the server administrator to look at the log of the intake service."
 
 #: src/routes/inbox.tsx
 msgid "Brievie kon deze brief niet goed lezen. Controleer hem in de app."

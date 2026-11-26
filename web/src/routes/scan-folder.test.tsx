@@ -165,6 +165,13 @@ describe("Scanmap", () => {
     expect(await screen.findByText(/hoort bij een andere werkruimte/)).toBeVisible();
   });
 
+  it("says when the last round broke off and when files were skipped", async () => {
+    scanServer({ ...on, check: "failing", skipped_count: 3 });
+    renderApp(path);
+    expect(await screen.findByText(/niet helemaal lezen/)).toBeVisible();
+    expect(screen.getByText(/3 bestanden in de scanmap overgeslagen/)).toBeVisible();
+  });
+
   it("says when it works", async () => {
     scanServer(on);
     renderApp(path);

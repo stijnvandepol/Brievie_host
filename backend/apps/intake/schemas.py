@@ -46,7 +46,8 @@ class ScanFolderOut(Schema):
     # The name the page proposes when none is chosen yet (from the workspace's name).
     suggested_name: str = ""
     per_person: bool = False
-    # The intake service's own look: ok, missing, not_readable, not_writable, taken (the
+    # The intake service's own look: ok, missing, not_readable, not_writable, failing (the
+    # last round broke off), taken (the
     # folder belongs to another workspace: `.brievie-werkruimte` names another), or unknown
     # (no look in the last 5 minutes: the service does not run).
     check: str = "unknown"
@@ -55,6 +56,9 @@ class ScanFolderOut(Schema):
     # Files seen and not yet taken, and how long the oldest has waited.
     waiting_count: int = 0
     oldest_waiting_minutes: int = 0
+    # Files the last round left out: too many in a folder or in the workspace, or a file
+    # whose name or date did not fit.
+    skipped_count: int = 0
     failed: list[ScanFailureOut] = Field(default_factory=list)
     folders: list[ScanSubfolderOut] = Field(default_factory=list)
     unknown_folders: list[ScanUnknownFolderOut] = Field(default_factory=list)

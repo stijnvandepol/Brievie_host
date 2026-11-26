@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.conf import settings
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -55,6 +55,14 @@ logger = logging.getLogger(__name__)
 ROUND_LIMIT = 20
 PURGE_AFTER = timedelta(days=30)
 UNKNOWN_FOLDERS_MAX = 50
+# What one round looks at (security review of PR #64, M4): candidates per folder, waiting
+# rows per workspace, scan letters still being read before more are taken in, and how long
+# a file may stay empty or keep changing before it goes to mislukt/.
+CANDIDATES_PER_FOLDER = 500
+ROWS_MAX = 2000
+PROCESSING_MAX = 50
+NEVER_SETTLED_AFTER = timedelta(hours=1)
+RELATIVE_PATH_MAX = 400
 # The reason of an imported row whose source could not be removed, and when to try again.
 REMOVE_FAILED = "remove_failed"
 REMOVE_RETRY = timedelta(hours=1)
@@ -76,6 +84,9 @@ REASON_TEXTS: Mapping[str, Promise] = {
         "niet meer. Zet het bestand in een andere map."
     ),
     "unreadable": _("Brievie kon dit bestand niet verwerken."),
+    "never_settled": _(
+        "Brievie heeft dit bestand niet opgehaald: het bleef leeg of veranderde een uur lang."
+    ),
 }
 
 _logged_root_refusals: set[str] = set()
@@ -127,8 +138,20 @@ def scan_round(*, now: Callable[[], datetime] = timezone.now) -> None:
                 # The type or code only: a message may quote a file's name.
                 code = error.code if isinstance(error, ScanRefusedError) else type(error).__name__
                 logger.warning("Scan folder round stopped for %s: %s", workspace_id, code)
+                _store_failing(workspace_id, now())
     finally:
         os.close(root_fd)
+
+
+def _store_failing(workspace_id: UUID, now: datetime) -> None:
+    """The page says the round broke off, instead of the last good look's "werkt"."""
+    try:
+        with workspace_context(workspace_id, actor=SYSTEM):
+            ScanFolderSettings.objects.filter(workspace_id=workspace_id, enabled=True).update(
+                check_state="failing", checked_at=now, updated_at=now
+            )
+    except DatabaseError:
+        logger.warning("Scan folder state not stored for %s", workspace_id)
 
 
 def _purge(workspace_id: UUID, now: datetime) -> None:
@@ -168,16 +191,20 @@ def scan_workspace(
             except ScanRefusedError:
                 continue
     _store_probe(workspace_id, checked, now=now)
-    sightings, unknown = _look(root_fd, config)
+    sightings, unknown, over = _look(root_fd, config)
     failed_names = scan_files.list_failed(root_fd, top)
-    ready, removable = _record(workspace_id, config, sightings, unknown, failed_names, now=now)
-    for row_id, imported in removable[:limit]:
+    found = _record(workspace_id, config, sightings, unknown, failed_names, now=now, skipped=over)
+    for row_id, imported in found.removable[:limit]:
         _verify_and_remove(workspace_id, root_fd, row_id, imported, data=None)
+    for sighting in found.unsettled[:limit]:
+        _fail(workspace_id, root_fd, sighting, "never_settled")
+    # The pipeline has enough of this workspace's scans to read: the rest waits.
+    room = min(limit, PROCESSING_MAX - _processing(workspace_id))
     # Only what was taken in or moved counts; a file that could do neither (no rights to
     # move it) is tried again next round but never holds up the files behind it.
     done = 0
-    for sighting in ready[: limit * 3]:
-        if done >= limit:
+    for sighting in found.ready[: limit * 3]:
+        if done >= room:
             break
         if _take(workspace_id, root_fd, sighting):
             done += 1
@@ -264,13 +291,23 @@ def _prepare(workspace_id: UUID) -> _Config | None:
         return _Config(folder_name=stored.folder_name, per_person=True, folders=folders)
 
 
-def _look(root_fd: int, config: _Config) -> tuple[list[_Sighting], list[dict[str, object]]]:
-    """The files in the workspace folder and its folders, and the folders nobody owns
-    (name masked, file count). Unknown and stopped folders are only counted."""
+def _look(root_fd: int, config: _Config) -> tuple[list[_Sighting], list[dict[str, object]], int]:
+    """The files in the workspace folder and its folders, the folders nobody owns (name
+    masked, file count), and how many files were left out because a folder holds more than
+    `CANDIDATES_PER_FOLDER`. Unknown and stopped folders are only counted."""
     top: RelPath = (config.folder_name,)
+    over = 0
+
+    def capped(folder: RelPath) -> list[tuple[RelPath, Fingerprint]]:
+        nonlocal over
+        found = scan_files.list_candidates(root_fd, folder, limit=CANDIDATES_PER_FOLDER + 1)
+        if len(found) > CANDIDATES_PER_FOLDER:
+            over += len(scan_files.list_candidates(root_fd, folder)) - CANDIDATES_PER_FOLDER
+        return found[:CANDIDATES_PER_FOLDER]
+
     sightings = [
         _Sighting(path, fingerprint, None, ScanFolder.State.ACTIVE)
-        for path, fingerprint in scan_files.list_candidates(root_fd, top)
+        for path, fingerprint in capped(top)
     ]
     known = {name: folder.state for name, folder in config.folders.items()}
     states, unknown_names = classify_subfolders(scan_files.list_subfolders(root_fd, top), known)
@@ -281,7 +318,7 @@ def _look(root_fd: int, config: _Config) -> tuple[list[_Sighting], list[dict[str
             unknown_names.append(name)
             continue
         try:
-            found = scan_files.list_candidates(root_fd, (*top, name))
+            found = capped((*top, name))
         except ScanRefusedError:
             continue
         sightings.extend(
@@ -294,7 +331,22 @@ def _look(root_fd: int, config: _Config) -> tuple[list[_Sighting], list[dict[str
                 "files": scan_files.count_candidates(root_fd, (*top, name)),
             }
         )
-    return sightings, unknown
+    return sightings, unknown, over
+
+
+@dataclass
+class _Recorded:
+    """What a round's bookkeeping found: stable files to take (oldest first), imported
+    files still on the share, files that never settled, and how many were skipped."""
+
+    ready: list[_Sighting] = field(default_factory=list)
+    removable: list[tuple[UUID, ImportedFile]] = field(default_factory=list)
+    unsettled: list[_Sighting] = field(default_factory=list)
+    skipped: int = 0
+
+
+def _fits(sighting: _Sighting) -> bool:
+    return len("/".join(sighting.path)) <= RELATIVE_PATH_MAX
 
 
 def _record(
@@ -305,36 +357,47 @@ def _record(
     failed_names: set[str],
     *,
     now: datetime,
-) -> tuple[list[_Sighting], list[tuple[UUID, ImportedFile]]]:
-    """Write what was seen; return the stable files to take (oldest first) and the
-    imported files still on the share (a removal that did not happen)."""
+    skipped: int = 0,
+) -> _Recorded:
+    """Write what was seen, each row on its own (one that does not fit never stops the
+    round), at most `ROWS_MAX` waiting rows per workspace, and a row only when it changed."""
+    result = _Recorded(skipped=skipped)
     ready: list[tuple[datetime, _Sighting]] = []
-    removable: list[tuple[UUID, ImportedFile]] = []
     prefix = config.folder_name + "/"
     with workspace_context(workspace_id, actor=SYSTEM):
-        ScanFolderSettings.objects.filter(workspace_id=workspace_id).update(
-            unknown_folders=unknown, updated_at=now
-        )
         rows = {
             (row.relative_path, row.device, row.inode): row
             for row in ScanFile.objects.filter(relative_path__startswith=prefix)
         }
+        waiting = sum(1 for row in rows.values() if row.state == ScanFile.State.SEEN)
         seen_keys: set[tuple[str, int, int]] = set()
         for sighting in sightings:
+            if not _fits(sighting):
+                result.skipped += 1
+                continue
             current = sighting.fingerprint
             key = ("/".join(sighting.path), current.device, current.inode)
             seen_keys.add(key)
             row = rows.get(key)
             if row is None:
-                ScanFile.objects.create(
-                    workspace_id=workspace_id,
-                    relative_path=key[0],
-                    size=current.size,
-                    mtime_ns=current.mtime_ns,
-                    device=current.device,
-                    inode=current.inode,
-                    stable_since=now,
-                )
+                if waiting >= ROWS_MAX:
+                    result.skipped += 1
+                    continue
+                if _saved(
+                    ScanFile(
+                        workspace_id=workspace_id,
+                        relative_path=key[0],
+                        size=current.size,
+                        mtime_ns=current.mtime_ns,
+                        device=current.device,
+                        inode=current.inode,
+                        stable_since=now,
+                        first_seen_at=now,
+                    )
+                ):
+                    waiting += 1
+                else:
+                    result.skipped += 1
                 continue
             previous = Fingerprint(row.device, row.inode, row.size, row.mtime_ns)
             if (
@@ -346,14 +409,16 @@ def _record(
                 # again); a removal that failed is tried again after an hour.
                 retry = row.reason != REMOVE_FAILED or row.updated_at < now - REMOVE_RETRY
                 if row.document_id is not None and retry:
-                    removable.append((row.id, ImportedFile.from_row(row)))
+                    result.removable.append((row.id, ImportedFile.from_row(row)))
                 continue
-            if row.state != ScanFile.State.SEEN:
+            changed = row.state != ScanFile.State.SEEN
+            if changed:
                 # Another file under an old row's path and inode: a new sighting.
                 row.state = ScanFile.State.SEEN
                 row.reason = ""
                 row.document = None
                 row.removed_at = None
+                row.first_seen_at = now
             take, since = stable(
                 previous,
                 row.stable_since,
@@ -361,10 +426,22 @@ def _record(
                 now,
                 stable_seconds=settings.BRIEVIE_SCAN_STABLE_SECONDS,
             )
+            changed = changed or (row.size, row.mtime_ns, row.stable_since) != (
+                current.size,
+                current.mtime_ns,
+                since,
+            )
             row.size, row.mtime_ns, row.stable_since = current.size, current.mtime_ns, since
-            row.save()
-            if take and sighting.state != ScanFolder.State.PAUSED:
+            if changed and not _saved(row):
+                result.skipped += 1
+                continue
+            if sighting.state == ScanFolder.State.PAUSED:
+                continue
+            if take:
                 ready.append((since, sighting))
+            elif now - (row.first_seen_at or now) >= NEVER_SETTLED_AFTER:
+                # Empty, or still changing after an hour: not a scan that is being written.
+                result.unsettled.append(sighting)
         for key, row in rows.items():
             if (
                 row.state == ScanFile.State.IMPORTED
@@ -383,8 +460,29 @@ def _record(
             ):
                 # Removed (or put back) from mislukt/ by hand.
                 row.delete()
+        ScanFolderSettings.objects.filter(workspace_id=workspace_id).update(
+            unknown_folders=unknown, skipped_count=result.skipped, updated_at=now
+        )
     ready.sort(key=lambda item: (item[0], item[1].path))
-    return [sighting for _since, sighting in ready], removable
+    result.ready = [sighting for _since, sighting in ready]
+    return result
+
+
+def _saved(row: ScanFile) -> bool:
+    """Save one row in a savepoint: a value the database refuses skips that file only."""
+    try:
+        with transaction.atomic():
+            row.save()
+    except DatabaseError:
+        return False
+    return True
+
+
+def _processing(workspace_id: UUID) -> int:
+    with workspace_context(workspace_id, actor=SYSTEM):
+        return Document.objects.filter(
+            source=Document.Source.WATCH_FOLDER, status=Document.Status.PROCESSING
+        ).count()
 
 
 def _take(workspace_id: UUID, root_fd: int, sighting: _Sighting) -> bool:

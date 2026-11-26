@@ -5425,6 +5425,11 @@ export interface components {
              */
             per_person: boolean;
             /**
+             * Skipped Count
+             * @default 0
+             */
+            skipped_count: number;
+            /**
              * Suggested Name
              * @default
              */

@@ -44,6 +44,8 @@ function reasonText(code: string): string {
       return t`Afbeelding te groot`;
     case "person_gone":
       return t`De persoon of afdeling is er niet meer`;
+    case "never_settled":
+      return t`Bleef leeg of veranderde steeds`;
     default:
       return t`Niet te verwerken`;
   }
@@ -77,6 +79,10 @@ function Check({ status }: { status: ScanFolder }) {
           <p>{t`Brievie kan de scanmap niet lezen. Geef de groep 'users' lees- en schrijfrechten op deze map.`}</p>
           <p className="muted">{t`De map is van gebruiker ${uid} en groep ${gid}.`}</p>
         </MessageBar>
+      );
+    case "failing":
+      return (
+        <MessageBar intent="error">{t`Brievie kon de scanmap de laatste keer niet helemaal lezen. Er komen nu geen brieven binnen. Vraag de serverbeheerder om in het logboek van de dienst intake te kijken.`}</MessageBar>
       );
     case "taken":
       return (
@@ -371,9 +377,19 @@ function Folders({ workspaceId, status }: { workspaceId: string; status: ScanFol
 
 function Status({ workspaceId, status }: { workspaceId: string; status: ScanFolder }) {
   const waiting = status.waiting_count;
+  const skipped = status.skipped_count ?? 0;
   return (
     <>
       <Check status={status} />
+      {status.enabled && (status.skipped_count ?? 0) > 0 ? (
+        <MessageBar intent="warning">
+          {plural(skipped, {
+            one: "Brievie heeft # bestand in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van het bestand past niet.",
+            other:
+              "Brievie heeft # bestanden in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van een bestand past niet.",
+          })}
+        </MessageBar>
+      ) : null}
       {status.enabled && status.oldest_waiting_minutes > 60 ? (
         <MessageBar intent="warning">
           {plural(waiting, {

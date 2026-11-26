@@ -219,9 +219,27 @@ def ensure_folder(root_fd: int, path: RelPath) -> None:
             os.close(fd)
 
 
+_INT8_MIN = -(2**63)
+_INT8_MAX = 2**63 - 1
+
+
+def int8(value: int) -> int:
+    """`value` as a signed 64-bit number (a PostgreSQL bigint): an unsigned 64-bit inode or
+    device keeps its bits, an mtime past the year 2262 or before 1677 is clamped (security
+    review of PR #64, M1: one odd file must not break every round)."""
+    if _INT8_MIN <= value <= _INT8_MAX:
+        return value
+    if _INT8_MAX < value < 2**64:
+        return value - 2**64
+    return _INT8_MAX if value > 0 else _INT8_MIN
+
+
 def _fingerprint(info: os.stat_result) -> Fingerprint:
     return Fingerprint(
-        device=info.st_dev, inode=info.st_ino, size=info.st_size, mtime_ns=info.st_mtime_ns
+        device=int8(info.st_dev),
+        inode=int8(info.st_ino),
+        size=int8(info.st_size),
+        mtime_ns=int8(info.st_mtime_ns),
     )
 
 
@@ -242,16 +260,28 @@ def _regular(info: os.stat_result) -> bool:
     return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
 
 
-def list_candidates(root_fd: int, folder: RelPath) -> list[tuple[RelPath, Fingerprint]]:
+def list_candidates(
+    root_fd: int, folder: RelPath, *, limit: int | None = None
+) -> list[tuple[RelPath, Fingerprint]]:
     """The files the job may read directly in `folder`: regular, one link, a PDF, JPEG
-    or PNG name. Links, other kinds and deeper folders are left out."""
+    or PNG name, in name order, at most `limit`. Links, other kinds and deeper folders are
+    left out; only candidate names are looked at (a folder flooded with other files costs a
+    listing, no `stat` each)."""
     _check(folder)
+    found: list[tuple[RelPath, Fingerprint]] = []
     with _folder(root_fd, folder) as fd:
-        return [
-            ((*folder, name), _fingerprint(info))
-            for name, info in _entries(fd)
-            if _regular(info) and is_candidate_name(name)
-        ]
+        for name in sorted(os.listdir(fd)):
+            if limit is not None and len(found) >= limit:
+                break
+            if not valid_name(name) or name.startswith(".") or not is_candidate_name(name):
+                continue
+            try:
+                info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            except OSError:
+                continue
+            if _regular(info):
+                found.append(((*folder, name), _fingerprint(info)))
+    return found
 
 
 def count_candidates(root_fd: int, folder: RelPath) -> int:

@@ -2370,6 +2370,10 @@ msgstr "Brievie did not take in this file: the person or department of this fold
 msgid "Brievie kon dit bestand niet verwerken."
 msgstr "Brievie could not process this file."
 
+#: apps/intake/scan_folder.py
+msgid "Brievie heeft dit bestand niet opgehaald: het bleef leeg of veranderde een uur lang."
+msgstr "Brievie did not take in this file: it stayed empty or kept changing for an hour."
+
 #: apps/intake/services.py
 msgid "Er is te weinig ruimte op de server om dit bestand te bewaren. Vraag de beheerder."
 msgstr "There is too little space on the server to keep this file. Ask the admin."

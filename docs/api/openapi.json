@@ -4802,6 +4802,11 @@
             "title": "Per Person",
             "type": "boolean"
           },
+          "skipped_count": {
+            "default": 0,
+            "title": "Skipped Count",
+            "type": "integer"
+          },
           "suggested_name": {
             "default": "",
             "title": "Suggested Name",

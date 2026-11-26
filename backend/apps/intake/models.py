@@ -27,6 +27,9 @@ class ScanFolderSettings(WorkspaceModel):
     # The last round's directories that map to nobody (or were stopped):
     # [{"name": <BSN-masked>, "files": <count>}], at most 50.
     unknown_folders = models.JSONField(default=list, blank=True)
+    # Files the last round could not take on: over the cap of a folder or of the
+    # workspace, or a row that did not fit (review of PR #64, M1, M4). Shown on the page.
+    skipped_count = models.IntegerField(default=0)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -91,6 +94,8 @@ class ScanFile(WorkspaceModel):
     inode = models.BigIntegerField()
     # Since when size and mtime are what they are now.
     stable_since = models.DateTimeField()
+    # The round that saw it first: a file that never settles goes to mislukt/ after a while.
+    first_seen_at = models.DateTimeField(null=True, blank=True)
     state = models.CharField(max_length=10, choices=State.choices, default=State.SEEN)
     # The refusal code of a failed file.
     reason = models.CharField(max_length=40, blank=True, default="")

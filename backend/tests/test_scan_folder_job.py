@@ -447,3 +447,91 @@ def test_a_purged_letter_whose_source_stayed_holds_nothing_up(
 
 def _refuse(root_fd: int, imported: scan_files.ImportedFile) -> None:
     raise scan_files.ScanRefusedError("changed")
+
+
+# Security review of PR #64 (M1, M4)
+
+
+def test_a_file_dated_past_2262_is_still_taken(share: Path) -> None:
+    world = make_world(per_person=False)
+    source = put(share, "kantoor", "toekomst.jpg")
+    far = 10_400_000_000 * 10**9  # the year 2299, past a signed 64-bit count of ns
+    try:
+        os.utime(source, ns=(far, far))
+    except (OSError, OverflowError, ValueError):
+        pytest.skip("this filesystem cannot hold that date")
+    two_rounds()
+    assert len(letters(world)) == 1
+    assert settings_row(world).check_state == "ok"
+
+
+def test_a_flooded_folder_is_capped_and_reported(
+    share: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = make_world(per_person=False)
+    monkeypatch.setattr(scan_folder, "CANDIDATES_PER_FOLDER", 3)
+    for number in range(5):
+        put(share, "kantoor", f"brief-{number}.jpg")
+    scan_round(now=at(0))
+    assert len(files(world)) == 3
+    assert settings_row(world).skipped_count == 2
+
+
+def test_the_rows_of_a_workspace_are_capped(share: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    world = make_world(per_person=False)
+    monkeypatch.setattr(scan_folder, "ROWS_MAX", 2)
+    for number in range(4):
+        put(share, "kantoor", f"brief-{number}.jpg")
+    scan_round(now=at(0))
+    assert len(files(world)) == 2
+    assert settings_row(world).skipped_count == 2
+
+
+def test_an_empty_file_goes_to_mislukt_after_an_hour(share: Path) -> None:
+    world = make_world(per_person=False)
+    put(share, "kantoor", "leeg.pdf", data=b"")
+    scan_round(now=at(0))
+    scan_round(now=at(LATER))
+    assert (share / "kantoor" / "leeg.pdf").exists()
+    scan_round(now=at(3700))
+    assert not (share / "kantoor" / "leeg.pdf").exists()
+    assert (share / "kantoor" / "mislukt" / "leeg.pdf").exists()
+    assert [(row.state, row.reason) for row in files(world)] == [("failed", "never_settled")]
+
+
+def test_an_unchanged_waiting_row_is_not_written_again(share: Path) -> None:
+    world = make_world()
+    scan_round(now=at(0))
+    set_state(world.workspace, e=False, d=False, a=False)
+    put(share, "kantoor", "Financien", "factuur.jpg")
+    scan_round(now=at(LATER))
+    [before] = files(world)
+    scan_round(now=at(2 * LATER))
+    [after] = files(world)
+    assert after.updated_at == before.updated_at
+
+
+def test_imports_wait_while_many_letters_are_still_processing(
+    share: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = make_world(per_person=False)
+    monkeypatch.setattr(scan_folder, "PROCESSING_MAX", 1)
+    for number in range(3):
+        put(share, "kantoor", f"brief-{number}.jpg")
+    two_rounds()
+    scan_round(now=at(2 * LATER))
+    # The pipeline does not run here: the first letter stays `processing`.
+    assert len(letters(world)) == 1
+
+
+def test_a_round_that_breaks_is_shown_on_the_page(
+    share: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = make_world(per_person=False)
+
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise DatabaseError("kapot")
+
+    monkeypatch.setattr(scan_folder, "_record", broken)
+    scan_round(now=at(LATER))
+    assert settings_row(world).check_state == "failing"

@@ -87,6 +87,7 @@ def scan_folder_status(workspace_id: UUID, *, now: datetime) -> ScanFolderOut:
             "owner_uid": stored.owner_uid,
             "owner_gid": stored.owner_gid,
             "waiting_count": waiting["count"],
+            "skipped_count": stored.skipped_count,
             "oldest_waiting_minutes": int((now - oldest).total_seconds() // 60)
             if oldest is not None
             else 0,

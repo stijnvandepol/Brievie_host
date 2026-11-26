@@ -462,3 +462,30 @@ def test_a_linked_claim_is_refused(root_fd: int, scan_root: Path, tmp_path: Path
     outside.write_text("werkruimte-een\n")
     (scan_root / "kantoor" / ".brievie-werkruimte").symlink_to(outside)
     assert not claim_folder(root_fd, ("kantoor",), "werkruimte-een")
+
+
+# Security review of PR #64 (M1, M4)
+
+
+@pytest.mark.parametrize(
+    ("value", "stored"),
+    [
+        (0, 0),
+        (2**63 - 1, 2**63 - 1),
+        (2**63, -(2**63)),
+        (2**64 - 1, -1),
+        (2**70, 2**63 - 1),
+        (-(2**70), -(2**63)),
+    ],
+)
+def test_any_stat_value_fits_a_bigint(value: int, stored: int) -> None:
+    # A 64-bit inode or an mtime past 2262 is kept as a signed 64-bit number.
+    assert scan_files.int8(value) == stored
+
+
+def test_candidates_are_capped_per_folder(root_fd: int, scan_root: Path) -> None:
+    for number in range(7):
+        write(scan_root / "kantoor" / f"brief-{number}.pdf")
+    write(scan_root / "kantoor" / "aaa.txt", b"x")
+    found = list_candidates(root_fd, ("kantoor",), limit=3)
+    assert [path[-1] for path, _print in found] == ["brief-0.pdf", "brief-1.pdf", "brief-2.pdf"]
