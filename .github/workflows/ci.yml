@@ -706,13 +706,17 @@ jobs:
       run:
         shell: bash
     env:
-      SLIM: ${{ runner.temp }}/docker-compose.synology.yml
-      OVERRIDE: ${{ runner.temp }}/ci.override.yml
-      COMPOSE: docker compose -f ${{ runner.temp }}/docker-compose.synology.yml -f ${{ runner.temp }}/ci.override.yml
       BRIEVIE_HOSTNAME: localhost
     steps:
       - name: Only on a GitHub-hosted runner
         run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - name: Where the files of this job go
+        run: |
+          {
+            echo "SLIM=$RUNNER_TEMP/docker-compose.synology.yml"
+            echo "OVERRIDE=$RUNNER_TEMP/ci.override.yml"
+            echo "COMPOSE=docker compose -f $RUNNER_TEMP/docker-compose.synology.yml -f $RUNNER_TEMP/ci.override.yml"
+          } >>"$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
