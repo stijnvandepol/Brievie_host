@@ -17,8 +17,9 @@ file, the answer or the child's error output is logged.
 
 This is a process boundary, not a container: the child still runs as the worker's user
 with its network, so a child taken over by a crafted file could still read what that user
-can read, such as the parent's `/proc/<pid>/environ` or a key file. A separate user or
-container closes that; it is a follow-up (DECISIONS, "Security review of PR #58").
+can read, such as a key file. The page count opens no new file at all after reading its
+input (`parsers.forbid_new_files`); rendering may still. A separate user or container
+closes that; it is a follow-up (DECISIONS, "Security review of PR #58" and "of PR #64").
 """
 
 import base64

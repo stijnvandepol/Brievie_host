@@ -184,6 +184,27 @@ def _limited(statement: str, *, cpu: int = 30, memory: int = 256 * 1024 * 1024) 
     )
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        f"open({str(Path(__file__))!r}, 'rb')",
+        "import socket; socket.socket()",
+        "import os; os.open('/proc/self/environ', os.O_RDONLY)",
+    ],
+)
+def test_the_counting_child_can_open_nothing_new(statement: str) -> None:
+    # Security review of PR #64 (M2): no key file, no parent's /proc, no share, no socket.
+    # Every module is imported before: what fails is the new descriptor, not an import.
+    command = _limited(f"import json, os, socket; parsers.forbid_new_files(); {statement}")
+    with pytest.raises(IsolationError):
+        sandbox.execute(command, b"", timeout=10, answer_limit=1024)
+
+
+def test_the_counting_child_still_answers_after_closing_the_door() -> None:
+    command = _limited("import json; parsers.forbid_new_files()")
+    assert sandbox.execute(command, b"", timeout=10, answer_limit=1024) == {"ok": True}
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS is a Linux limit")
 def test_the_memory_limit_stops_a_greedy_child() -> None:
     with pytest.raises(IsolationError):
