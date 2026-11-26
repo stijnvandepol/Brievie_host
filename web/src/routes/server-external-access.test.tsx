@@ -5,7 +5,7 @@ import { API, HttpResponse, http, loggedInHandlers, renderApp, server, user } fr
 
 const serverAdmin = { ...user, is_server_admin: true };
 
-const tunnelOn = {
+const ownTunnel = {
   hostname: "192.168.1.20",
   vpn_hostname: "",
   public_hostname: "brievie.example.nl",
@@ -14,16 +14,16 @@ const tunnelOn = {
     { url: "https://brievie.example.nl", kind: "public", certificate: "public" },
   ],
   public_web: false,
-  tunnel: { token_set: true, connected: "yes" },
-  trusted_proxies: [],
+  tunnel: { token_set: false, connected: "not_set" },
+  trusted_proxies: ["192.168.1.20/32"],
   second_factor_available: true,
   seen_as: { route: "private", secure: true, client_ip: "192.168.1.30", peer_ip: "172.18.0.1" },
   checks: [
     { code: "public_web_off", level: "ok" },
-    { code: "cloudflare_reads_along", level: "warning" },
+    { code: "public_name_from_untrusted_source", level: "warning" },
     { code: "app_update_needed", level: "warning" },
   ],
-  docs_url: "https://brievie.com/docs/installeren#van-buiten",
+  docs_url: "https://brievie.com/nl/install/#publieke-toegang",
 };
 
 function asServerAdmin(found: object) {
@@ -36,7 +36,7 @@ function asServerAdmin(found: object) {
 
 describe("the external access page", () => {
   it("shows one panel per way with on/off", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     renderApp("/server/van-buiten");
     expect(
       await screen.findByRole("heading", { level: 1, name: "Van buiten bereikbaar" }),
@@ -47,16 +47,17 @@ describe("the external access page", () => {
     expect(
       within(screen.getByRole("region", { name: /VPN/ })).getByText("Uit"),
     ).toBeInTheDocument();
-    const tunnel = screen.getByRole("region", { name: /Cloudflare Tunnel/ });
-    expect(within(tunnel).getByText("Aan")).toBeInTheDocument();
-    expect(within(tunnel).getByText("https://brievie.example.nl")).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: /Eigen reverse proxy/ })).getByText("Uit"),
-    ).toBeInTheDocument();
+    const own = screen.getByRole("region", { name: /Eigen tunnel of reverse proxy/ });
+    expect(within(own).getByText("Aan")).toBeInTheDocument();
+    expect(within(own).getByText("https://brievie.example.nl")).toBeInTheDocument();
+    expect(within(own).getByText("192.168.1.20/32")).toBeInTheDocument();
+    expect(within(own).getByText("brievie.example.nl")).toBeInTheDocument();
+    // Brievie runs no tunnel any more: nothing about a token or a Cloudflare panel.
+    expect(screen.queryByRole("region", { name: /Cloudflare Tunnel/ })).not.toBeInTheDocument();
   });
 
   it("shows each check with text and icon, not colour alone", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     renderApp("/server/van-buiten");
     const list = await screen.findByRole("list", { name: "Controles" });
     const items = within(list).getAllByRole("listitem");
@@ -64,14 +65,14 @@ describe("the external access page", () => {
     expect(items[0]).toHaveTextContent("In orde");
     expect(items[0]).toHaveTextContent("Via het publieke adres werkt alleen de app.");
     expect(items[1]).toHaveTextContent("Let op");
-    expect(items[1]).toHaveTextContent("Cloudflare kan alles lezen wat er langskomt");
+    expect(items[1]).toHaveTextContent("Er kwamen verzoeken voor de publieke naam binnen");
     for (const item of items) {
       expect(item.querySelector("svg")).not.toBeNull();
     }
   });
 
   it("shows the address Brievie sees", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     renderApp("/server/van-buiten");
     const seen = await screen.findByRole("region", { name: "Zo ziet Brievie jouw verbinding" });
     expect(within(seen).getByText("192.168.1.30")).toBeInTheDocument();
@@ -80,25 +81,35 @@ describe("the external access page", () => {
   });
 
   it("links to the website docs", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     renderApp("/server/van-buiten");
     const link = await screen.findByRole("link", { name: "Uitleg en voorbeelden op de website" });
-    expect(link).toHaveAttribute("href", "https://brievie.com/docs/installeren#van-buiten");
+    expect(link).toHaveAttribute("href", "https://brievie.com/nl/install/#publieke-toegang");
+  });
+
+  it("links to the English install page in English", async () => {
+    asServerAdmin(ownTunnel);
+    server.use(http.get(`*${API}/me`, () => HttpResponse.json({ ...serverAdmin, language: "en" })));
+    renderApp("/server/van-buiten");
+    const link = await screen.findByRole("link", {
+      name: "Explanation and examples on the website",
+    });
+    expect(link).toHaveAttribute("href", "https://brievie.com/en/install/#public-access");
   });
 
   it("has no input fields and shows no token", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     renderApp("/server/van-buiten");
     await screen.findByRole("list", { name: "Controles" });
     expect(screen.queryAllByRole("textbox")).toHaveLength(0);
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    expect(screen.getByText(/het token zelf staat nooit op dit scherm/)).toBeInTheDocument();
+    expect(screen.queryByText(/token/i)).not.toBeInTheDocument();
   });
 
   it("renders the red line for public web without a second factor", async () => {
     asServerAdmin({
-      ...tunnelOn,
+      ...ownTunnel,
       public_web: true,
       second_factor_available: false,
       checks: [{ code: "public_web_without_second_factor", level: "problem" }],
@@ -113,7 +124,7 @@ describe("the external access page", () => {
 
   it("says the second step is required outside, without a red line", async () => {
     asServerAdmin({
-      ...tunnelOn,
+      ...ownTunnel,
       public_web: true,
       checks: [
         { code: "public_web_second_factor_required", level: "ok" },
@@ -142,7 +153,7 @@ describe("the external access page", () => {
   });
 
   it("is in a server admin's menu", async () => {
-    asServerAdmin(tunnelOn);
+    asServerAdmin(ownTunnel);
     const u = userEvent.setup();
     renderApp("/koppel-app");
     await u.click(await screen.findByRole("button", { name: "Account" }));
@@ -154,14 +165,13 @@ describe("the external access page", () => {
 describe("what the server saw on the way in", () => {
   it("names the local address that asked for the public name", async () => {
     asServerAdmin({
-      ...tunnelOn,
-      tunnel: { token_set: false, connected: "not_set" },
+      ...ownTunnel,
       trusted_proxies: [],
       untrusted_public_name_peer: "192.168.1.5",
       checks: [{ code: "public_name_from_untrusted_source", level: "problem" }],
     });
     renderApp("/server/van-buiten");
-    const proxy = await screen.findByRole("region", { name: /Eigen reverse proxy/ });
+    const proxy = await screen.findByRole("region", { name: /Eigen tunnel of reverse proxy/ });
     expect(within(proxy).getByText("192.168.1.5")).toBeInTheDocument();
     expect(proxy).toHaveTextContent("alleen in BRIEVIE_TRUSTED_PROXIES als dit je eigen proxy is");
     const list = screen.getByRole("list", { name: "Controles" });

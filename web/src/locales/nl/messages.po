@@ -1351,6 +1351,10 @@ msgstr "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
 msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
 msgstr "Brievie leest deze brief nog. Je hoeft niets te doen."
 
+#: src/routes/server-external-access.tsx
+msgid "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet."
+msgstr "Brievie start zelf geen tunnel. Je zet zelf een tunnel (zoals Cloudflare Tunnel) of reverse proxy op, buiten Brievie, en laat die doorsturen naar de https-poort van deze server. Bij een tunnel van een andere partij kan die partij meelezen; met een VPN niet."
+
 #: src/routes/visibility.tsx
 msgid "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."
 msgstr "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."
@@ -1376,10 +1380,6 @@ msgid "BRIEVIE_HOSTNAME is localhost of 127.0.0.1. Een iPhone kan deze server zo
 msgstr "BRIEVIE_HOSTNAME is localhost of 127.0.0.1. Een iPhone kan deze server zo niet bereiken. Zet het IP-adres of de naam van de server in je thuisnetwerk."
 
 #: src/routes/server-external-access.tsx
-msgid "BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel."
-msgstr "BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel."
-
-#: src/routes/server-external-access.tsx
 msgid "BRIEVIE_PUBLIC_URLS is met de hand gezet en bevat het publieke adres niet. Haal BRIEVIE_PUBLIC_URLS en ALLOWED_HOSTS weg, dan volgen ze vanzelf uit de namen."
 msgstr "BRIEVIE_PUBLIC_URLS is met de hand gezet en bevat het publieke adres niet. Haal BRIEVIE_PUBLIC_URLS en ALLOWED_HOSTS weg, dan volgen ze vanzelf uit de namen."
 
@@ -1402,10 +1402,6 @@ msgstr "Certificaat"
 #: src/components/ai-status-line.tsx
 msgid "Claude van Anthropic in de Verenigde Staten ({host})"
 msgstr "Claude van Anthropic in de Verenigde Staten ({host})"
-
-#: src/routes/server-external-access.tsx
-msgid "Cloudflare Tunnel"
-msgstr "Cloudflare Tunnel"
 
 #: src/components/sign-in-code.tsx
 #: src/routes/pair-app.tsx
@@ -1987,8 +1983,8 @@ msgid "Eigen document"
 msgstr "Eigen document"
 
 #: src/routes/server-external-access.tsx
-msgid "Eigen reverse proxy"
-msgstr "Eigen reverse proxy"
+msgid "Eigen tunnel of reverse proxy"
+msgstr "Eigen tunnel of reverse proxy"
 
 #: src/routes/language.tsx
 msgid "Elk apparaat gebruikt zijn eigen taal."
@@ -2023,12 +2019,8 @@ msgid "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
 msgstr "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
 
 #: src/routes/server-external-access.tsx
-msgid "Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
-msgstr "Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
-
-#: src/routes/server-external-access.tsx
-msgid "Er is een tunnel-token ingesteld, maar de afgelopen 7 dagen kwam er geen verzoek via de tunnel binnen. Draait de tunnel? Start Brievie opnieuw met ./brievie start; zonder ./brievie zet je COMPOSE_PROFILES=tunnel. Kijk ook of de service in het Cloudflare-dashboard http://caddy:8080 is."
-msgstr "Er is een tunnel-token ingesteld, maar de afgelopen 7 dagen kwam er geen verzoek via de tunnel binnen. Draait de tunnel? Start Brievie opnieuw met ./brievie start; zonder ./brievie zet je COMPOSE_PROFILES=tunnel. Kijk ook of de service in het Cloudflare-dashboard http://caddy:8080 is."
+msgid "Er is een eigen tunnel of reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
+msgstr "Er is een eigen tunnel of reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
 
 #: src/components/emergency-dialog.tsx
 msgid "Er is geen post van {name} die je nog niet kon zien."
@@ -2065,10 +2057,6 @@ msgstr "Er is nog niets opgeslagen."
 #: src/routes/server-external-access.tsx
 msgid "Er kwamen verzoeken binnen die door een proxy zijn doorgestuurd, van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app). Is dat je eigen reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES."
 msgstr "Er kwamen verzoeken binnen die door een proxy zijn doorgestuurd, van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app). Is dat je eigen reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES."
-
-#: src/routes/server-external-access.tsx
-msgid "Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek."
-msgstr "Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek."
 
 #: src/routes/server-external-access.tsx
 msgid "Er kwamen verzoeken voor de publieke naam binnen van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app) en telde het directe adres. Is dat je reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES."
@@ -2198,6 +2186,10 @@ msgstr "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
 #: src/components/label-chip.tsx
 msgid "Geel"
 msgstr "Geel"
+
+#: src/routes/server-external-access.tsx
+msgid "geen"
+msgstr "geen"
 
 #: src/components/label-picker.tsx
 #: src/routes/duplicate.tsx
@@ -2440,8 +2432,8 @@ msgid "Herstellink voor {name}"
 msgstr "Herstellink voor {name}"
 
 #: src/routes/server-external-access.tsx
-msgid "Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf."
-msgstr "Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf."
+msgid "Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen tunnel of reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf."
+msgstr "Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen tunnel of reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf."
 
 #: src/routes/document.tsx
 msgid "Het document gaat naar de prullenbak. Daar blijft het 30 dagen. Zo lang kun je het terugzetten. Daarna wordt het voorgoed gewist."
@@ -2454,10 +2446,6 @@ msgstr "Het herstelblad is gedownload."
 #: src/routes/duplicate.tsx
 msgid "Het is dezelfde brief"
 msgstr "Het is dezelfde brief"
-
-#: src/routes/server-external-access.tsx
-msgid "Het makkelijkst, maar Cloudflare kan alles lezen wat er langskomt."
-msgstr "Het makkelijkst, maar Cloudflare kan alles lezen wat er langskomt."
 
 #: src/components/rule-sentence.ts
 msgid "Het soort post"
@@ -2613,10 +2601,6 @@ msgstr "Informatie"
 #: src/components/audit-codes.ts
 msgid "Ingelogd"
 msgstr "Ingelogd"
-
-#: src/routes/server-external-access.tsx
-msgid "ingesteld (het token zelf staat nooit op dit scherm)"
-msgstr "ingesteld (het token zelf staat nooit op dit scherm)"
 
 #: src/components/sign-in-code.tsx
 #: src/routes/login.tsx
@@ -3365,10 +3349,6 @@ msgstr "Mensen uitnodigen"
 msgid "Menu"
 msgstr "Menu"
 
-#: src/routes/server-external-access.tsx
-msgid "Met Cloudflare Tunnel maakt Cloudflare de versleuteling op zijn eigen servers open. Cloudflare kan alles lezen wat er langskomt, ook gescande brieven. Met een VPN kan niemand onderweg meelezen."
-msgstr "Met Cloudflare Tunnel maakt Cloudflare de versleuteling op zijn eigen servers open. Cloudflare kan alles lezen wat er langskomt, ook gescande brieven. Met een VPN kan niemand onderweg meelezen."
-
 #: src/components/reset-link-dialog.tsx
 msgid "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
 msgstr "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
@@ -3540,6 +3520,10 @@ msgstr "Niet actief"
 #: src/routes/server-external-access.tsx
 msgid "Niet elke serverbeheerder heeft tweestapsverificatie aan. Wie het niet aan heeft, kan van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging."
 msgstr "Niet elke serverbeheerder heeft tweestapsverificatie aan. Wie het niet aan heeft, kan van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging."
+
+#: src/routes/server-external-access.tsx
+msgid "niet ingesteld"
+msgstr "niet ingesteld"
 
 #: src/components/task-actions.tsx
 msgid "Niet meer aan mij"
@@ -4147,6 +4131,10 @@ msgstr "Prullenbak legen?"
 msgid "Publiek adres"
 msgstr "Publiek adres"
 
+#: src/routes/server-external-access.tsx
+msgid "Publieke naam"
+msgstr "Publieke naam"
+
 #: src/components/invite-dialog.tsx
 msgid "QR-code met de uitnodiging"
 msgstr "QR-code met de uitnodiging"
@@ -4604,10 +4592,6 @@ msgstr "Tot wanneer stel je dit uit?"
 msgid "Tot wanneer wacht je op een reactie?"
 msgstr "Tot wanneer wacht je op een reactie?"
 
-#: src/routes/server-external-access.tsx
-msgid "Tunnel-token"
-msgstr "Tunnel-token"
-
 #: src/routes/member-devices.tsx
 #: src/routes/security.tsx
 msgid "Tweestapsverificatie"
@@ -4689,10 +4673,6 @@ msgstr "Uit de brief: ‘{quote}’"
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet niets, maar blijft bewaard."
 msgstr "Uit: de regel doet niets, maar blijft bewaard."
-
-#: src/routes/server-external-access.tsx
-msgid "Uit. Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy om hem te gebruiken."
-msgstr "Uit. Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy om hem te gebruiken."
 
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/components/task-list.tsx
@@ -4943,10 +4923,6 @@ msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
 
 #: src/routes/server-external-access.tsx
-msgid "Verzoek via de tunnel gezien (laatste 7 dagen)"
-msgstr "Verzoek via de tunnel gezien (laatste 7 dagen)"
-
-#: src/routes/server-external-access.tsx
 msgid "Verzoeken via een proxy of voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"
 msgstr "Verzoeken via een proxy of voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"
 
@@ -5183,6 +5159,10 @@ msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer h
 #: src/routes/people-detail.tsx
 msgid "We kunnen deze persoon niet vinden."
 msgstr "We kunnen deze persoon niet vinden."
+
+#: src/routes/server-external-access.tsx
+msgid "Webinterface via het publieke adres"
+msgstr "Webinterface via het publieke adres"
 
 #: src/routes/tasks.tsx
 msgid "Weer open: {description}"

@@ -659,7 +659,7 @@ export interface paths {
         };
         /**
          * Get External Access
-         * @description Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret: only whether a tunnel token is set. Waits up to 2 seconds for the tunnel, outside a transaction. Cache-Control: no-store.
+         * @description Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret. `tunnel` is kept for older clients and is always not set (Brievie runs no tunnel; remote access is your own tool). Cache-Control: no-store.
          */
         get: operations["getExternalAccess"];
         put?: never;
@@ -5995,9 +5995,15 @@ export interface components {
         };
         /** TunnelOut */
         TunnelOut: {
-            /** Connected */
+            /**
+             * Connected
+             * @default not_set
+             */
             connected: string;
-            /** Token Set */
+            /**
+             * Token Set
+             * @default false
+             */
             token_set: boolean;
         };
         /**
