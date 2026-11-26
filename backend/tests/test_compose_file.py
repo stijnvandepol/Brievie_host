@@ -183,3 +183,10 @@ def test_logs_rotate() -> None:
 
 def test_the_database_hostname_placeholder_is_the_only_hostname_default() -> None:
     assert set(re.findall(r"BRIEVIE_HOSTNAME:-([^}]+)\}", TEXT)) == {"verander-mij.local"}
+
+
+def test_the_hostname_is_written_in_one_place() -> None:
+    """Changing the one line marked <-- must also reach caddy."""
+    assert TEXT.count("verander-mij.local}") == 1
+    assert "BRIEVIE_HOSTNAME: &hostname ${BRIEVIE_HOSTNAME:-verander-mij.local}" in TEXT
+    assert TEXT.count("BRIEVIE_HOSTNAME: *hostname") == 1

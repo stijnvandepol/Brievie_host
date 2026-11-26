@@ -15,7 +15,8 @@ x-backend: &backend
 x-settings: &settings
   # <-- The name or IP address your iPhone uses for this server, for example mynas.local
   # or 192.168.1.20. The example name is refused on purpose.
-  BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:-verander-mij.local}
+  # Written once: caddy reads the same value through the anchor &hostname.
+  BRIEVIE_HOSTNAME: &hostname ${BRIEVIE_HOSTNAME:-verander-mij.local}
   # This is a compose-only install (not ./brievie): the web interface then offers the
   # recovery sheet. Never set it in deploy/docker-compose.yml.
   BRIEVIE_COMPOSE_INSTALL: "true"
@@ -269,7 +270,7 @@ services:
     depends_on:
       api: { condition: service_healthy }
     environment:
-      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:-verander-mij.local}
+      BRIEVIE_HOSTNAME: *hostname
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
