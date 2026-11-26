@@ -316,8 +316,9 @@ def test_the_folders_addressee_can_be_undone(share: Path) -> None:
     put(share, "kantoor", "Medewerker", "brief.jpg")
     two_rounds()
     [document] = letters(world)
-    membership = Membership.objects.get(workspace=world.workspace, user=world.admin)
-    with as_actor(world.workspace, world.admin.id):
+    # The letter is on the member's name; admins do not read all post here.
+    membership = Membership.objects.get(workspace=world.workspace, user=world.member)
+    with as_actor(world.workspace, world.member.id):
         events = list_document_events(membership=membership, document_id=document.id)
     [added] = [e for e in events if e.kind == DocumentEvent.Kind.ADDRESSEE_ADDED]
     assert added.origin == "watch_folder"

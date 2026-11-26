@@ -57,7 +57,11 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOCTTY
 _NEW_FILE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
 _FOLDER_MODE = 0o2770
-_FILE_MODE = 0o660
+# A file Brievie writes on the share: the reason beside a refused file is read by the
+# office (group), the placeholder and the probe by nobody. Removing them needs rights on
+# the folder, not on the file.
+_REASON_MODE = 0o640
+_PRIVATE_MODE = 0o600
 _PROBE_NAME = ".brievie-check"
 _REASON_SUFFIX = ".reden.txt"
 _MAX_NUMBER = 1000
@@ -352,13 +356,13 @@ def move_to_failed(root_fd: int, path: RelPath, *, reason_text: str) -> RelPath:
                 name = _numbered(path[-1], number)
                 reason = name + _REASON_SUFFIX
                 try:
-                    placeholder = os.open(name, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=target)
+                    placeholder = os.open(name, _NEW_FILE_FLAGS, _PRIVATE_MODE, dir_fd=target)
                 except FileExistsError:
                     continue
                 placeholder_inode = os.fstat(placeholder).st_ino
                 os.close(placeholder)
                 try:
-                    reason_fd = os.open(reason, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=target)
+                    reason_fd = os.open(reason, _NEW_FILE_FLAGS, _REASON_MODE, dir_fd=target)
                 except FileExistsError:
                     _remove_own(target, name, placeholder_inode)
                     continue
@@ -418,7 +422,7 @@ def _probe_in(fd: int) -> ProbeResult:
         return ProbeResult("not_readable", *owner)
     for attempt in range(2):
         try:
-            check = os.open(_PROBE_NAME, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=fd)
+            check = os.open(_PROBE_NAME, _NEW_FILE_FLAGS, _PRIVATE_MODE, dir_fd=fd)
             break
         except FileExistsError:
             if attempt or not _remove_stale_probe(fd):
