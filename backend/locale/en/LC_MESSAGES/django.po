@@ -2217,8 +2217,8 @@ msgid "Brievie %(version)s is klaar om te starten."
 msgstr "Brievie %(version)s is ready to start."
 
 #: apps/installer/restore_install.py
-msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker keeper caddy. Er is niets veranderd."
-msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker keeper caddy. Nothing has changed."
+msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker intake keeper caddy. Er is niets veranderd."
+msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker intake keeper caddy. Nothing has changed."
 
 #: apps/installer/restore_install.py
 msgid "Er staan al gegevens in deze installatie. Wil je ze vervangen door de back-up? Typ het commando opnieuw met --replace. Er is niets veranderd."

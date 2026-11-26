@@ -21,6 +21,7 @@ SERVICES = (
     "init",
     "api",
     "worker",
+    "intake",
     "keeper",
     "caddy",
     "cloudflared",
@@ -104,7 +105,18 @@ def test_every_service_but_caddy_uses_the_backend_image_by_anchor() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["init-secrets", "postgres", "init", "api", "worker", "keeper", "cloudflared", "admin"]
+    "name",
+    [
+        "init-secrets",
+        "postgres",
+        "init",
+        "api",
+        "worker",
+        "intake",
+        "keeper",
+        "cloudflared",
+        "admin",
+    ],
 )
 def test_only_caddy_publishes_a_port(name: str) -> None:
     assert "ports:" not in service(name)
@@ -124,7 +136,7 @@ def test_the_keeper_has_its_own_secrets_and_no_master_key() -> None:
     assert "MASTER_KEY" not in keeper
 
 
-@pytest.mark.parametrize("name", ["api", "worker"])
+@pytest.mark.parametrize("name", ["api", "worker", "intake"])
 def test_the_api_and_worker_see_neither_the_vault_nor_the_keeper_files(name: str) -> None:
     block = service(name)
     assert "secrets-api:/run/brievie:ro" in block
@@ -134,7 +146,7 @@ def test_the_api_and_worker_see_neither_the_vault_nor_the_keeper_files(name: str
         assert name_in_vault not in block
 
 
-@pytest.mark.parametrize("name", ["api", "worker", "keeper"])
+@pytest.mark.parametrize("name", ["api", "worker", "intake", "keeper"])
 def test_the_long_running_services_drop_every_capability(name: str) -> None:
     block = service(name)
     assert "cap_drop: [ALL]" in block

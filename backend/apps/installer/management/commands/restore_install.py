@@ -9,8 +9,8 @@ from apps.installer import restore_install, restore_runtime, runtime
 class Command(BaseCommand):
     help = (
         "Restore a back-up on a compose install (run in the admin container, after "
-        "`docker compose stop api worker keeper caddy`; the master key of the back-up must be "
-        "the one in the vault). Exit 0: restored and checked; 1: refused or failed."
+        "`docker compose stop api worker intake keeper caddy`; the master key of the back-up "
+        "must be the one in the vault). Exit 0: restored and checked; 1: refused or failed."
     )
 
     # The database may be empty or absent: the system checks would open it.

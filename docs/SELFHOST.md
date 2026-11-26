@@ -870,7 +870,7 @@ past `min_upgrade_from` ("Werk eerst bij naar ..."), another PostgreSQL major, a
 file of another revision ("Dit compose-bestand is te oud") and too little free space. A
 refusal changes no data: `init` stops with exit 1 and `docker compose logs init` has the
 sentence (Portainer and Synology show `init` as "Exited (1)"). **The service is down until you
-fix it:** Compose has already taken the old api, worker, keeper and caddy down to make the new
+fix it:** Compose has already taken the old api, worker, intake, keeper and caddy down to make the new
 ones (they show as "Created"), and they wait for `init`. Put the old version number back and
 start again, and the same server comes back (CI proves this with a refused jump and a refused
 step back). This is different from `./brievie update`, which checks before it stops anything.
@@ -890,7 +890,7 @@ put the old version number in the file, then type, one by one (these are the com
 `init` prints; a test keeps them equal):
 
 ```
-docker compose stop api worker keeper caddy
+docker compose stop api worker intake keeper caddy
 BRIEVIE_BACKUP_DIR=update-backup docker compose --profile admin run --rm admin python manage.py restore_install pre-update-<version> --replace
 docker compose up -d
 ```
@@ -903,7 +903,7 @@ file of the release.
 
 ### Restoring
 
-Stop `api worker keeper caddy`, then
+Stop `api worker intake keeper caddy`, then
 `docker compose --profile admin run --rm admin python manage.py restore_install [<run id or pre-update-X.Y.Z>] [--replace]`.
 It refuses while any of those still holds a database session, and `--replace` is needed when
 there is data. The back-up is opened with the master key of the vault. **On a new machine

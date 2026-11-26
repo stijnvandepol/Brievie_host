@@ -12,6 +12,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    # Also on `scan`, the intake service's network without a way out.
+    networks: [default, scan]
     # Not published: the stack reaches it on its own network, and on a NAS port 5432 is
     # often taken by the NAS's own database. make (and ./brievie with
     # BRIEVIE_PUBLISH_POSTGRES=true) adds docker-compose.dev.yml, which publishes it on
@@ -94,6 +96,8 @@ services:
       # Who must use two-step sign-in, and the days they get to switch it on.
       BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
       BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
+      # Only whether the server has a scan folder (the Scanmap page); never mounted here.
+      BRIEVIE_SCAN_DIR_SET: ${BRIEVIE_SCAN_DIR:+true}
     healthcheck:
       # The Host header must be an allowed host: the first ALLOWED_HOSTS entry, else the
       # home name (from which the api derives ALLOWED_HOSTS).
@@ -150,6 +154,44 @@ services:
       # Encrypted document files (BRIEVIE_STORAGE_ROOT): the member export reads the pages
       # and writes its file under exports/, which the api serves for the download.
       - documents:/data/documents
+    # No published port.
+
+  # The scan folder (intake spec S 3): same image, serves only the `intake` queue. The only
+  # container that sees the share (BRIEVIE_SCAN_DIR); it checks each file, seals
+  # it into the documents volume and queues the letter for the worker. Its network reaches
+  # PostgreSQL only. The group (100: "users" on a Synology) gives it the share's rights.
+  intake:
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
+      # A real folder is mounted at /scan; this says whether it is one.
+      BRIEVIE_SCAN_DIR_SET: ${BRIEVIE_SCAN_DIR:+true}
+    stop_grace_period: 1m
+    command:
+      - sh
+      - -c
+      - python manage.py check_master_key && exec python manage.py procrastinate worker --queues intake
+    group_add: ["${BRIEVIE_SCAN_GID:-100}"]
+    volumes:
+      - documents:/data/documents
+      # A named volume while BRIEVIE_SCAN_DIR is unset (BRIEVIE_SCAN_DIR_SET is then empty
+      # and nothing is read there).
+      - ${BRIEVIE_SCAN_DIR:-scan-unset}:/scan
+    networks: [scan]
+    read_only: true
+    # The PDF checker's answer file.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     # No published port.
 
   # Back-ups: same image, serves only the `backup` queue. It reads the database as the
@@ -311,6 +353,8 @@ volumes:
   caddy-authority:
   backup-config:
   backup-unset:
+  # The scan folder while BRIEVIE_SCAN_DIR is unset (the intake service reads nothing there).
+  scan-unset:
   # An update's emergency back-up on a server without a destination. No service mounts
   # it: ./brievie mounts it at /backup of the one-off admin container for one call
   # (BRIEVIE_BACKUP_DIR=update-backup), so only the update itself ever prunes it.
@@ -319,3 +363,6 @@ volumes:
 networks:
   # Caddy and the optional cloudflared only (security review of PR #53).
   tunnel: {}
+  # The intake service and PostgreSQL only: no way out to the internet.
+  scan:
+    internal: true

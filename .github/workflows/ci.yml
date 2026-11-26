@@ -1051,7 +1051,7 @@ jobs:
         run: |
           set -euo pipefail
           export BRIEVIE_CI_TAG=$GOOD
-          $COMPOSE stop api worker keeper caddy
+          $COMPOSE stop api worker intake keeper caddy
           # The emergency back-up of the update is in the volume update-backup.
           BRIEVIE_BACKUP_DIR=update-backup $COMPOSE --profile admin run --rm admin \
             python manage.py restore_install "pre-update-$BAD" --replace | tee "$RUNNER_TEMP/way-back.log"
@@ -1160,7 +1160,7 @@ jobs:
           cat "$RUNNER_TEMP/running.log"
           test "$rc" != 0
           grep -q 'draait nog' "$RUNNER_TEMP/running.log"
-          $COMPOSE stop api worker keeper caddy
+          $COMPOSE stop api worker intake keeper caddy
           rc=0
           $COMPOSE --profile admin run --rm admin python manage.py restore_install \
             > "$RUNNER_TEMP/no-replace.log" 2>&1 || rc=$?
