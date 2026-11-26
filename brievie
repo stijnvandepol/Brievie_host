@@ -765,10 +765,10 @@ loopback_host() {
 
 # --- reachable from outside (docs/SELFHOST.md, "Van buiten bereikbaar") ---------------------
 
-# Whether a Cloudflare Tunnel is set: a token, or a file with the token, in deploy/.env. Only
-# whether one is there: the value goes into no variable that is printed, and into no argument
-# (compose reads it from deploy/.env and hands it to the cloudflared container alone).
-tunnel_on() {
+# Whether deploy/.env still holds the settings of the tunnel Brievie used to start itself
+# (removed: remote access is your own tool, docs/SELFHOST.md section 25). Only whether one
+# is there: the value goes into no variable that is printed.
+old_tunnel_set() {
 	[ -n "$(env_value BRIEVIE_TUNNEL_TOKEN)$(env_value BRIEVIE_TUNNEL_TOKEN_FILE)" ]
 }
 
@@ -793,12 +793,8 @@ plain_name() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/\.$//'
 }
 
-# Refuses names Caddy and the api would refuse anyway, before anything starts, and a
-# COMPOSE_PROFILES line that would pull the tunnel into the main start.
+# Refuses names Caddy and the api would refuse anyway, before anything starts.
 check_external_settings() {
-	if [ -n "$(env_value COMPOSE_PROFILES)" ]; then
-		fail "In deploy/.env staat COMPOSE_PROFILES. Haal die regel weg: ./brievie start de tunnel zelf als BRIEVIE_TUNNEL_TOKEN is ingesteld. Er is niets veranderd."
-	fi
 	home_name=$(plain_name "$(unquote "$(env_value BRIEVIE_HOSTNAME)")")
 	vpn_name=$(unquote "$(env_value BRIEVIE_VPN_HOSTNAME)")
 	public_name=$(unquote "$(env_value BRIEVIE_PUBLIC_HOSTNAME)")
@@ -817,46 +813,23 @@ check_external_settings() {
 		{ [ -n "$vpn_name" ] && [ "$(plain_name "$public_name")" = "$(plain_name "$vpn_name")" ]; }; }; then
 		fail "BRIEVIE_PUBLIC_HOSTNAME is dezelfde naam als BRIEVIE_HOSTNAME of BRIEVIE_VPN_HOSTNAME. Gebruik elke naam maar één keer. Er is niets veranderd."
 	fi
-	if [ -n "$public_name" ] && ! tunnel_on && [ -z "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
-		echo "Let op: BRIEVIE_PUBLIC_HOSTNAME is ingesteld, maar er is geen tunnel en geen BRIEVIE_TRUSTED_PROXIES. Verzoeken voor die naam krijgen alleen de app, en alle bezoekers tellen als één adres. Het adres van je proxy staat thuis op de pagina Van buiten bereikbaar."
-	fi
-	if tunnel_on && [ -z "$public_name" ]; then
-		echo "Let op: er is een tunnel-token ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet in deploy/.env de publieke naam van de tunnel (zoals brievie.voorbeeld.nl)."
+	if [ -n "$public_name" ] && [ -z "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+		echo "Let op: BRIEVIE_PUBLIC_HOSTNAME is ingesteld, maar BRIEVIE_TRUSTED_PROXIES niet. Verzoeken voor die naam krijgen alleen de app, en alle bezoekers tellen als één adres. Het adres van je proxy staat thuis op de pagina Van buiten bereikbaar."
 	fi
 }
 
-# After the stack is up: the tunnel, when one is set. It starts after the rest and on its
-# own: a tunnel that does not start is a warning, never a failed start (the home network
-# keeps working). Waits up to BRIEVIE_TUNNEL_WAIT seconds (15) for it to run.
-start_tunnel() {
-	tunnel_on || return 0
-	limit=${BRIEVIE_TUNNEL_WAIT:-15}
-	case $limit in
-	'' | *[!0-9]*) limit=15 ;;
-	esac
-	waited=0
-	if quietly compose_raw --profile tunnel up -d --no-deps cloudflared; then
-		while :; do
-			if compose_raw --profile tunnel ps --status running --services 2>/dev/null | grep -qx cloudflared; then
-				echo "De tunnel naar Cloudflare draait."
-				return 0
-			fi
-			[ "$waited" -lt "$limit" ] || break
-			sleep 1
-			waited=$((waited + 1))
-		done
-	fi
-	echo "Brievie draait, maar de tunnel naar Cloudflare start niet. Controleer BRIEVIE_TUNNEL_TOKEN." >&2
+# After the stack is up: an install that still has the old tunnel settings. Brievie no longer
+# starts a tunnel; that is a message, never a failed or refused start (the home network
+# keeps working). The token is never printed.
+warn_old_tunnel() {
+	old_tunnel_set || return 0
+	echo "Let op: BRIEVIE_TUNNEL_TOKEN staat nog in deploy/.env, maar de tunnel van Brievie start niet meer. Brievie beheert geen tunnel meer: zet zelf een tunnel, VPN of proxy op (zie docs/SELFHOST.md, onderdeel 25) en zet daarna BRIEVIE_PUBLIC_HOSTNAME in deploy/.env op de publieke naam. Je kunt de tunnelregels uit deploy/.env halen." >&2
 	return 0
 }
 
-# Stops the named services, and the tunnel with them when one is set.
+# Stops the named services.
 compose_stop() {
-	if tunnel_on; then
-		compose --profile tunnel stop "$@" cloudflared
-	else
-		compose stop "$@"
-	fi
+	compose stop "$@"
 }
 
 # The addresses besides the home one, and the warning about the web sign-in on the internet.
@@ -871,7 +844,7 @@ print_external_addresses() {
 	fi
 	case $(unquote "$(env_value BRIEVIE_PUBLIC_WEB)" | tr '[:upper:]' '[:lower:]') in
 	1 | true | yes | on)
-		if tunnel_on || [ -n "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+		if [ -n "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
 			echo "Let op: inloggen op de webinterface kan van buiten zonder tweede stap (BRIEVIE_PUBLIC_WEB=true). Zet het uit of gebruik een VPN."
 		fi
 		;;
@@ -1144,7 +1117,7 @@ cmd_start() {
 	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
 	with_watchdog "typ daarna opnieuw ./brievie start." quietly all compose_raw up -d --build --wait ||
 		fail "Brievie is niet goed gestart. Typ daarna opnieuw ./brievie start."
-	start_tunnel
+	warn_old_tunnel
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
@@ -2162,7 +2135,7 @@ EOF
 	write_marker "het starten" || true
 	echo "Brievie wordt gestart…"
 	compose up -d --wait || step_failed $? "Brievie is niet goed gestart na het terugzetten."
-	start_tunnel
+	warn_old_tunnel
 
 	# 9. Check the result against the back-up.
 	write_marker "de controle" || true
@@ -2633,7 +2606,7 @@ cmd_update_finish() {
 	compose exec -T api python manage.py check_health --expect-version "$finish_to" ||
 		finish_failed "Brievie antwoordt niet goed na het bijwerken."
 	quietly all compose_raw up -d --wait --no-build caddy || finish_failed "Caddy is niet goed gestart."
-	start_tunnel
+	warn_old_tunnel
 	if ! compose exec -T api python manage.py record_update --from "$finish_from" --to "$finish_to" \
 		${finish_run:+--backup-run "$finish_run"} >/dev/null; then
 		echo "Bijgewerkt, maar het vastleggen lukte niet. ./brievie status laat deze update daarom niet zien."
