@@ -159,7 +159,8 @@ def test_a_crash_before_the_removal_makes_no_second_letter(
     # A failed removal waits an hour before the next try.
     scan_round(now=at(2 * LATER))
     assert source.exists()
-    scan_round(now=at(2 * LATER + 3600))
+    # The row's time is the real clock's (T0 is fixed when the module loads).
+    scan_round(now=lambda: timezone.now() + timedelta(hours=2))
     assert [d.id for d in letters(world)] == [first.id]
     assert not source.exists()
 
