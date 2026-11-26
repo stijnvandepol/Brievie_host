@@ -58,6 +58,7 @@ services:
       - secrets-api:/out/api
       - secrets-keeper:/out/keeper
       - secrets-init:/out/init
+      - secrets-intake:/out/intake
       - backup-config:/data/backup-config
       - documents:/data/documents:ro
       - pgdata:/var/lib/postgresql:ro
@@ -72,9 +73,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
       - secrets-postgres:/run/brievie:ro
-    # Not published, and on a network without a way out: only Brievie's own services
-    # reach it.
-    networks: [db]
+    # Not published, and on networks without a way out: only Brievie's own services
+    # reach it. `scan` carries the intake service and PostgreSQL only.
+    networks: [db, scan]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 2s
@@ -254,10 +255,12 @@ services:
     # Synology). Set BRIEVIE_SCAN_DIR to the folder, for example /volume1/scans/brievie.
     group_add: ["${BRIEVIE_SCAN_GID:-100}"]
     volumes:
-      - secrets-api:/run/brievie:ro
+      # Its own keys: the secret key, the app password and the master key, no back-up password.
+      - secrets-intake:/run/brievie:ro
       - documents:/data/documents
       - ${BRIEVIE_SCAN_DIR:-scan-unset}:/scan
-    networks: [db]
+    # Its own network with PostgreSQL only: never the api, past Caddy (review of PR #64).
+    networks: [scan]
     read_only: true
     # The PDF checker's answer file.
     tmpfs:
@@ -404,6 +407,9 @@ networks:
   db:
     internal: true
   edge: {}
+  # The intake service and PostgreSQL only: no way out to the internet.
+  scan:
+    internal: true
   # Caddy and the optional cloudflared only (security review of PR #53).
   tunnel: {}
 
@@ -411,13 +417,14 @@ volumes:
   # The data. `docker compose down -v` removes all of it: never type -v.
   pgdata:
   documents:
-  # The keys. `secrets` holds all of them; the next three hold what each service needs.
+  # The keys. `secrets` holds all of them; the next five hold what each service needs.
   # Keep your master key on the recovery sheet as well: without it the documents are lost.
   secrets:
   secrets-postgres:
   secrets-api:
   secrets-keeper:
   secrets-init:
+  secrets-intake:
   backup-config:
   caddy-data:
   caddy-config:

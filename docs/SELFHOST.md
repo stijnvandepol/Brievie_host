@@ -880,10 +880,11 @@ lists them all).
 
 What happened at the first start: `init-secrets` (no network) made the keys in volumes: one
 vault (`secrets`) and a volume per service (`secrets-postgres`, `secrets-init`, `secrets-api`,
-`secrets-keeper`), each with only the files that service needs: `init` has every password but no
-master key (no migration or back-up step decrypts a document), the keeper has no master
-key, the api no superuser or owner password, and PostgreSQL is on a network without a
-way out. `init` then made the database roles, checked that this version may start on this
+`secrets-keeper`, `secrets-intake`), each with only the files that service needs: `init` has every
+password but no master key (no migration or back-up step decrypts a document), the keeper has no
+master key, the api no superuser or owner password, the scan folder's `intake` no back-up
+password, and PostgreSQL is on a network without a way out. `intake` has a network of its own
+that reaches PostgreSQL only. `init` then made the database roles, checked that this version may start on this
 data, and ran the migrations. No secret is in the compose file, in `docker compose config`,
 in `docker inspect`, in a log or in a process list (the CI job `compose-stack` checks it).
 
@@ -982,7 +983,7 @@ back-up folder is not one of these volumes. Then, one by one:
 
 ```
 docker compose down
-docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_pgdata brievie_documents brievie_backup-config
+docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_secrets-intake brievie_pgdata brievie_documents brievie_backup-config
 ```
 
 (the project is called `brievie`; check with `docker volume ls`). Your back-up folder, the compose file

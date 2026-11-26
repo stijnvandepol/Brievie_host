@@ -3766,3 +3766,9 @@ An independent review found one high and five medium points; the owner ruled on 
   workspace are looked at (the rest is counted); a row is written only when it changed; a
   file that stays empty or keeps changing for an hour goes to `mislukt/` (`never_settled`);
   imports wait while 50 scan letters of the workspace are still being read.
+- **M5: the compose-only file isolates `intake` as the wrapper's does:** its own internal
+  network `scan` with PostgreSQL only (not the shared `db` network that carries the api), and
+  its own secrets volume `secrets-intake` with the secret key (the api's: it serves no
+  request), the app password and the master key, no back-up password. `init_secrets` fills
+  it only when it is mounted, so a compose file without it (0.5.0) keeps working;
+  `COMPOSE_REVISION` stays 1.
