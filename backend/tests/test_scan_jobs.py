@@ -6,7 +6,9 @@ from unittest import mock
 
 import psycopg
 import pytest
+from procrastinate import PsycopgConnector
 from procrastinate.contrib.django import app as procrastinate_app
+from procrastinate.manager import JobManager
 from psycopg.rows import TupleRow
 
 from apps.intake import jobs
@@ -60,6 +62,19 @@ def defer_round(conn: psycopg.Connection[TupleRow]) -> int:
     return int(str(row[0]))
 
 
+async def run_retry_task(conninfo: str) -> None:
+    """The task on the real queue, through its own connection (the suite's Django connection
+    is not left open by a worker thread)."""
+    connector = PsycopgConnector(conninfo=conninfo)
+    await connector.open_async()
+    try:
+        context = mock.Mock()
+        context.app.job_manager = JobManager(connector)
+        await jobs.retry_stalled_intake_jobs(context, timestamp=0)
+    finally:
+        await connector.close_async()
+
+
 def status(conn: psycopg.Connection[TupleRow], job_id: int) -> str:
     row = conn.execute("SELECT status FROM procrastinate_jobs WHERE id = %s", [job_id]).fetchone()
     assert row is not None
@@ -84,9 +99,7 @@ def test_a_killed_round_is_closed_so_the_waiting_round_runs(owner_conninfo: str)
         ).fetchone()
         assert blocked is None or blocked[0] is None  # B waits behind the dead A
 
-        context = mock.Mock()
-        context.app = procrastinate_app
-        asyncio.run(jobs.retry_stalled_intake_jobs(context, timestamp=0))
+        asyncio.run(run_retry_task(owner_conninfo))
 
         assert status(conn, dead) == "failed"
         assert status(conn, waiting) == "todo"
