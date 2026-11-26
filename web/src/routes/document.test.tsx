@@ -592,6 +592,15 @@ describe("document made by the autopilot", () => {
           },
           {
             ...base,
+            id: "a6",
+            kind: "addressee_added",
+            origin: "watch_folder",
+            person_name: "Financien",
+            can_undo: true,
+            created_at: "2026-11-10T10:02:40Z",
+          },
+          {
+            ...base,
             id: "a4",
             kind: "reopened",
             origin: "user",
@@ -615,7 +624,10 @@ describe("document made by the autopilot", () => {
     expect(
       screen.getByText("Bram zette de brief terug in de Inbox om te controleren"),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(2);
+    expect(
+      screen.getByText("Automatisch toegevoegd uit de scanmap van Financien"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(3);
   });
 
   it("reopens a letter the AI confirmed, after a question", async () => {

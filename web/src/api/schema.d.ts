@@ -2319,6 +2319,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/scan-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scan Folder
+         * @description The workspace's scan folder: whether the server has one, the switch, the folder's name, the intake service's check, what waits and what failed, and the folders per person or department. Web session only: a bearer token answers 401 not_authenticated. Administrators only.
+         */
+        get: operations["getScanFolder"];
+        /**
+         * Update Scan Folder
+         * @description Switch the scan folder and its folders per person on or off and name the workspace's folder (empty: keep the name, or the suggested one). 409 `scan_folder_unavailable` when the server has no scan folder, `scan_folder_taken` when another workspace uses the name; 422 `validation_error` for a name that is not lower case letters, digits and `-`. Web session only: a bearer token answers 401 not_authenticated. Administrators only.
+         */
+        put: operations["updateScanFolder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/scan-folder/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Scan Folder
+         * @description A folder for a person or department ("Map maken"), also one without an account; with `name` an unknown folder of that name becomes theirs ("Koppel aan"). A stopped folder is read again. 404 `person_not_found`; 409 `scan_subfolder_taken` when another has that name (case ignored), `scan_folder_departments_off` for a department while departments are off. Web session only: a bearer token answers 401 not_authenticated. Administrators only.
+         */
+        post: operations["addScanFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/scan-folder/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Scan Folder
+         * @description Stop reading a person's or department's folder ("Niet meer lezen"). The folder and its files stay on the share; it is then listed as an unknown folder. 404 `scan_folder_not_found`. Web session only: a bearer token answers 401 not_authenticated. Administrators only.
+         */
+        delete: operations["removeScanFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/settings": {
         parameters: {
             query?: never;
@@ -5281,6 +5345,157 @@ export interface components {
             matched_count: number;
             /** Total Count */
             total_count: number;
+        };
+        /** ScanFailureOut */
+        ScanFailureOut: {
+            /**
+             * Failed At
+             * Format: date-time
+             */
+            failed_at: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+        };
+        /** ScanFolderIn */
+        ScanFolderIn: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Folder Name
+             * @default
+             */
+            folder_name: string;
+            /**
+             * Per Person
+             * @default false
+             */
+            per_person: boolean;
+        };
+        /** ScanFolderOut */
+        ScanFolderOut: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Check
+             * @default unknown
+             */
+            check: string;
+            /**
+             * Departments Enabled
+             * @default false
+             */
+            departments_enabled: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Failed */
+            failed?: components["schemas"]["ScanFailureOut"][];
+            /**
+             * Folder Name
+             * @default
+             */
+            folder_name: string;
+            /** Folders */
+            folders?: components["schemas"]["ScanSubfolderOut"][];
+            /**
+             * Oldest Waiting Minutes
+             * @default 0
+             */
+            oldest_waiting_minutes: number;
+            /**
+             * Owner Gid
+             * @default 0
+             */
+            owner_gid: number;
+            /**
+             * Owner Uid
+             * @default 0
+             */
+            owner_uid: number;
+            /**
+             * Per Person
+             * @default false
+             */
+            per_person: boolean;
+            /**
+             * Skipped Count
+             * @default 0
+             */
+            skipped_count: number;
+            /**
+             * Suggested Name
+             * @default
+             */
+            suggested_name: string;
+            /** Unknown Folders */
+            unknown_folders?: components["schemas"]["ScanUnknownFolderOut"][];
+            /**
+             * Waiting Count
+             * @default 0
+             */
+            waiting_count: number;
+        };
+        /** ScanSubfolderIn */
+        ScanSubfolderIn: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id: string;
+        };
+        /** ScanSubfolderOut */
+        ScanSubfolderOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id?: string | null;
+            /**
+             * Person Name
+             * @default
+             */
+            person_name: string;
+            /** State */
+            state: string;
+            /**
+             * Waiting Count
+             * @default 0
+             */
+            waiting_count: number;
+        };
+        /** ScanUnknownFolderOut */
+        ScanUnknownFolderOut: {
+            /**
+             * Files
+             * @default 0
+             */
+            files: number;
+            /** Name */
+            name: string;
         };
         /** SecondFactorCodeIn */
         SecondFactorCodeIn: {
@@ -14975,6 +15190,301 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getScanFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanFolderOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateScanFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanFolderIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanFolderOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    addScanFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanSubfolderIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanFolderOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    removeScanFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanFolderOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

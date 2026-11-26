@@ -425,6 +425,19 @@ export const aiSuppliersQuery = (workspaceId: string) =>
     },
   });
 
+/** The Scanmap page: the switch, the intake service's check and the folders (admins). */
+export const scanFolderQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "scan-folder"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/scan-folder", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 /** How the workspace's letters are read: `off`, `external` or `local`. */
 export const aiStatusQuery = (workspaceId: string) =>
   queryOptions({

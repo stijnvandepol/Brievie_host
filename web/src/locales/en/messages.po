@@ -170,6 +170,10 @@ msgstr "{days} days ahead"
 msgid "{emptyCount, plural, one {# brief in de prullenbak wordt voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft deze brief nog. Daar blijft hij in tot die back-up verloopt.} other {# brieven in de prullenbak worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft deze brieven nog. Daar blijven ze in tot die back-up verloopt.}}"
 msgstr "{emptyCount, plural, one {# letter in the trash will be erased from Brievie for good. You can't undo this. A backup made earlier still has this letter. It stays there until that backup expires.} other {# letters in the trash will be erased from Brievie for good. You can't undo this. A backup made earlier still has these letters. They stay there until that backup expires.}}"
 
+#: src/routes/scan-folder.tsx
+msgid "{files, plural, one {# bestand wacht} other {# bestanden wachten}}"
+msgstr "{files, plural, one {# file waiting} other {# files waiting}}"
+
 #: src/components/letter-status.tsx
 msgid "{fresh} nieuw"
 msgstr "{fresh} new"
@@ -249,6 +253,10 @@ msgstr "{rest} and {last}"
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# second} other {# seconds}}"
 
+#: src/routes/scan-folder.tsx
+msgid "{skipped, plural, one {Brievie heeft # bestand in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van het bestand past niet.} other {Brievie heeft # bestanden in de scanmap overgeslagen: er staan te veel bestanden, of de naam of datum van een bestand past niet.}}"
+msgstr "{skipped, plural, one {Brievie skipped # file in the scan folder: there are too many files, or the file's name or date does not fit.} other {Brievie skipped # files in the scan folder: there are too many files, or a file's name or date does not fit.}}"
+
 #: src/components/rule-sentence.ts
 msgid "{subject} {quoted} bevat"
 msgstr "{subject} contains {quoted}"
@@ -286,6 +294,10 @@ msgstr "{waiting, plural, one {# letter} other {# letters}}"
 #: src/components/letter-status.tsx
 msgid "{waiting, plural, one {# wacht op reactie} other {# wachten op reactie}}"
 msgstr "{waiting, plural, one {# waiting for a reply} other {# waiting for a reply}}"
+
+#: src/routes/scan-folder.tsx
+msgid "{waiting, plural, one {Er wacht # bestand langer dan een uur. Draait Brievie?} other {Er wachten # bestanden langer dan een uur. Draait Brievie?}}"
+msgstr "{waiting, plural, one {# file has been waiting for more than an hour. Is Brievie running?} other {# files have been waiting for more than an hour. Is Brievie running?}}"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -507,6 +519,7 @@ msgstr "Account: {name}"
 
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/scan-folder.tsx
 msgid "Actie"
 msgstr "Action"
 
@@ -552,6 +565,10 @@ msgstr "Address"
 #: src/routes/ai.tsx
 msgid "Adres van de AI op je netwerk"
 msgstr "Address of the AI on your network"
+
+#: src/routes/scan-folder.tsx
+msgid "Afbeelding te groot"
+msgstr "Image too large"
 
 #: src/routes/departments.tsx
 msgid "Afdeling maken"
@@ -726,6 +743,7 @@ msgid "Alle werkruimtes"
 msgstr "All workspaces"
 
 #: src/routes/ai.tsx
+#: src/routes/scan-folder.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Only the admin of this workspace can change this."
 
@@ -852,6 +870,7 @@ msgstr "Always on. Phones in your own network use this address."
 #: src/routes/automations.tsx
 #: src/routes/departments.tsx
 #: src/routes/labels.tsx
+#: src/routes/scan-folder.tsx
 #: src/routes/security.tsx
 #: src/routes/visibility.tsx
 msgid "Annuleren"
@@ -950,6 +969,10 @@ msgstr "Added automatically by a rule: label {label}"
 #: src/components/document-history.tsx
 msgid "Automatisch toegevoegd door regel {ruleName}: label {label}"
 msgstr "Added automatically by rule {ruleName}: label {label}"
+
+#: src/components/document-history.tsx
+msgid "Automatisch toegevoegd uit de scanmap van {person}"
+msgstr "Added automatically from the scan folder of {person}"
 
 #: src/routes/document.tsx
 msgid "Automatisch toegevoegd: {list}"
@@ -1066,11 +1089,16 @@ msgstr "Look in the archive"
 msgid "Belastingaangifte"
 msgstr "Tax return"
 
+#: src/routes/scan-folder.tsx
+msgid "Beschadigd of onvolledig"
+msgstr "Damaged or incomplete"
+
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Decision"
 
 #: src/components/upload-documents.tsx
+#: src/routes/scan-folder.tsx
 msgid "Bestand"
 msgstr "File"
 
@@ -1093,6 +1121,10 @@ msgstr "contains the word"
 #: src/components/rule-sentence.ts
 msgid "bevat niet het woord"
 msgstr "does not contain the word"
+
+#: src/routes/scan-folder.tsx
+msgid "Beveiligd met een wachtwoord"
+msgstr "Protected with a password"
 
 #: src/components/page.tsx
 #: src/routes/security.tsx
@@ -1204,6 +1236,10 @@ msgstr "Arrived as an upload"
 #: src/components/label-chip.tsx
 msgid "Blauw"
 msgstr "Blue"
+
+#: src/routes/scan-folder.tsx
+msgid "Bleef leeg of veranderde steeds"
+msgstr "Stayed empty or kept changing"
 
 #: src/routes/inbox.tsx
 #: src/routes/settings.tsx
@@ -1335,6 +1371,18 @@ msgstr "Brievie confirms a letter by itself if everything in it can be read clea
 msgid "Brievie haalde een taak weg bij {person}: die mag deze brief niet meer lezen"
 msgstr "Brievie took a task back from {person}: they may no longer read this letter"
 
+#: src/routes/scan-folder.tsx
+msgid "Brievie haalt een bestand pas op als het een minuut niet meer verandert, en haalt het daarna uit de map. Dan staat het in Brievie, niet in de prullenbak van je NAS."
+msgstr "Brievie only takes a file once it has not changed for a minute, and then removes it from the folder. It is then in Brievie, not in your NAS's recycle bin."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie haalt geen brieven meer uit deze map. De map en de bestanden erin blijven op de NAS staan."
+msgstr "Brievie no longer takes letters from this folder. The folder and the files in it stay on the NAS."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie heeft de scanmap de laatste minuten niet bekeken. Draait Brievie helemaal?"
+msgstr "Brievie has not looked at the scan folder in the last few minutes. Is all of Brievie running?"
+
 #: src/routes/trash.tsx
 msgid "Brievie houdt nog geen bewaartermijn bij. Moet je een brief bewaren, bijvoorbeeld een factuur voor de belasting? Let daar dan zelf op voordat je hem wist."
 msgstr "Brievie does not keep track of retention periods yet. Do you need to keep a letter, for example an invoice for your taxes? Then check that yourself before you erase it."
@@ -1343,17 +1391,37 @@ msgstr "Brievie does not keep track of retention periods yet. Do you need to kee
 msgid "Brievie instellen"
 msgstr "Set up Brievie"
 
+#: src/routes/scan-folder.tsx
+msgid "Brievie kan de scanmap niet lezen. Geef de groep 'users' lees- en schrijfrechten op deze map."
+msgstr "Brievie cannot read the scan folder. Give the group 'users' read and write rights on this folder."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie kon de scanmap de laatste keer niet helemaal lezen. Er komen nu geen brieven binnen. Vraag de serverbeheerder om in het logboek van de dienst intake te kijken."
+msgstr "Brievie could not read all of the scan folder the last time. No letters are coming in now. Ask the server administrator to look at the log of the intake service."
+
 #: src/routes/inbox.tsx
 msgid "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
 msgstr "Brievie could not read this letter properly. Check it in the app."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie leest de map {quoted} niet. Koppel hem aan een persoon of afdeling, of haal de bestanden eruit."
+msgstr "Brievie does not read the folder {quoted}. Link it to a person or department, or take the files out."
 
 #: src/routes/inbox.tsx
 msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
 msgstr "Brievie is still reading this letter. You don't need to do anything."
 
+#: src/routes/scan-folder.tsx
+msgid "Brievie maakt in je map een map voor iedereen met een account en voor elke afdeling. Een brief in zo'n map komt direct bij die persoon of afdeling."
+msgstr "Brievie makes a folder in yours for everyone with an account and for each department. A letter in such a folder goes straight to that person or department."
+
 #: src/routes/visibility.tsx
 msgid "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."
 msgstr "Brievie suggests these settings. Clear a box to keep something as it is."
+
+#: src/routes/scan-folder.tsx
+msgid "Brievie vindt de map nog niet en kan hem ook niet maken. Controleer de rechten op de scanmap van de server."
+msgstr "Brievie cannot find the folder yet and cannot make it. Check the rights on the server's scan folder."
 
 #: src/components/autopilot-panel.tsx
 msgid "Brievie zet brieven zelf onder personen en labels."
@@ -1487,6 +1555,7 @@ msgstr "date"
 #: src/components/document-details-form.tsx
 #: src/components/document-table.tsx
 #: src/routes/duplicate.tsx
+#: src/routes/scan-folder.tsx
 msgid "Datum"
 msgstr "Date"
 
@@ -1627,6 +1696,10 @@ msgstr "The last successful backup is more than a day and a half old. See below 
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "After this the link no longer works. Anyone who already has it can no longer use it to get in."
 
+#: src/routes/scan-folder.tsx
+msgid "De map is van gebruiker {uid} en groep {gid}."
+msgstr "The folder belongs to user {uid} and group {gid}."
+
 #: src/routes/backup.tsx
 msgid "De map moet op een andere schijf staan dan de gegevens en eigendom zijn van gebruiker 10001. Wil je een back-up op afstand? Zet dan BRIEVIE_BACKUP_REPOSITORY in plaats van de map."
 msgstr "The folder must be on another disk than the data and be owned by user 10001. Do you want a remote backup? Then set BRIEVIE_BACKUP_REPOSITORY instead of the folder."
@@ -1634,6 +1707,10 @@ msgstr "The folder must be on another disk than the data and be owned by user 10
 #: src/components/invite-dialog.tsx
 msgid "De oude link werkt niet meer."
 msgstr "The old link no longer works."
+
+#: src/routes/scan-folder.tsx
+msgid "De persoon of afdeling is er niet meer"
+msgstr "The person or department is no longer there"
 
 #: src/routes/people-detail.tsx
 msgid "De post van {name} gaat naar wie post verdeelt."
@@ -1654,6 +1731,10 @@ msgstr "The rule is applied to all your mail, not just the newest 500."
 #: src/routes/rule-editor.tsx
 msgid "De regel wordt op al je post toegepast."
 msgstr "The rule is applied to all your mail."
+
+#: src/routes/scan-folder.tsx
+msgid "De scanmap werkt."
+msgstr "The scan folder works."
 
 #: src/routes/visibility.tsx
 msgid "De serverbeheerder zet noodtoegang aan of uit."
@@ -1736,6 +1817,10 @@ msgstr "Share"
 msgid "Delen met"
 msgstr "Share with"
 
+#: src/routes/scan-folder.tsx
+msgid "Deze bestanden staan in de map 'mislukt'. Zet een bestand terug in de scanmap om het opnieuw te proberen, of haal het weg."
+msgstr "These files are in the folder 'mislukt'. Put a file back in the scan folder to try again, or remove it."
+
 #: src/routes/duplicate.tsx
 msgid "Deze brief houden"
 msgstr "Keep this letter"
@@ -1781,6 +1866,10 @@ msgstr "These duplicate letters are not here (any more)."
 msgid "Deze link werkt alleen op je thuisnetwerk."
 msgstr "This link only works on your home network."
 
+#: src/routes/scan-folder.tsx
+msgid "Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt."
+msgstr "This folder belongs to another workspace on this server. Choose another name, or remove the file .brievie-werkruimte from the folder if that workspace no longer uses it."
+
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
 msgstr "This page does not exist."
@@ -1788,6 +1877,10 @@ msgstr "This page does not exist."
 #: src/routes/rule-editor.tsx
 msgid "Deze regel bestaat niet (meer)."
 msgstr "This rule does not exist (any more)."
+
+#: src/routes/scan-folder.tsx
+msgid "Deze server heeft geen scanmap. Vraag de serverbeheerder om er een in te stellen."
+msgstr "This server has no scan folder. Ask the server administrator to set one up."
 
 #: src/components/handle-dialog.tsx
 msgid "Deze taken worden afgevinkt:"
@@ -1934,6 +2027,10 @@ msgstr "An AI service on the internet"
 msgid "Een beheerder kan dan een uur lang post lezen die hij anders niet ziet, met een reden die in het logboek komt. Uitzetten beëindigt een noodtoegang die nog loopt."
 msgstr "An admin can then read post they otherwise do not see for one hour, with a reason that goes into the log. Switching it off ends any emergency access still running."
 
+#: src/routes/scan-folder.tsx
+msgid "Een bestand dat Brievie niet kan lezen, komt in de map 'mislukt' met een uitleg ernaast."
+msgstr "A file Brievie cannot read goes to the folder 'mislukt' with an explanation beside it."
+
 #: src/components/upload-documents.tsx
 msgid "Eén bestand wordt één brief. Zitten er meer brieven in één bestand? Scan of bewaar ze dan los."
 msgstr "One file becomes one letter. Are there more letters in one file? Then scan or save them separately."
@@ -1941,6 +2038,10 @@ msgstr "One file becomes one letter. Are there more letters in one file? Then sc
 #: src/components/privacy-settings.tsx
 msgid "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al zijn, blijven zoals ze zijn."
 msgstr "A letter with the label Healthcare then becomes private on its own. Letters that are already there stay as they are."
+
+#: src/routes/scan-folder.tsx
+msgid "Een brief uit de map van een persoon of afdeling komt direct bij die persoon of afdeling. Wie hem verder ziet, volgt 'Wie ziet wat' van deze werkruimte."
+msgstr "A letter from a person's or department's folder goes straight to that person or department. Who else sees it follows 'Who sees what' of this workspace."
 
 #: src/routes/security.tsx
 msgid "Een gekoppelde telefoon blijft werken als je tweestapsverificatie aanzet. Wil je opnieuw beginnen? Ontkoppel hem bij Apparaten."
@@ -2009,6 +2110,10 @@ msgstr "Every checked letter and every own document, to find again. What still w
 #: src/components/rule-sentence.ts
 msgid "en"
 msgstr "and"
+
+#: src/routes/scan-folder.tsx
+msgid "Er bestaat al een map met deze naam en er staat iets in. Brievie gebruikt alleen een map die het zelf maakt of die leeg is. Kies een andere naam, of maak de map leeg."
+msgstr "A folder with this name already exists and something is in it. Brievie only uses a folder it makes itself or one that is empty. Choose another name, or empty the folder."
 
 #: src/routes/inbox.tsx
 msgid "Er blijft niets liggen."
@@ -2227,6 +2332,10 @@ msgstr "No exact match. This looks similar."
 #: src/components/audit-table.tsx
 msgid "Geen gebeurtenissen gevonden."
 msgstr "No events found."
+
+#: src/routes/scan-folder.tsx
+msgid "Geen PDF, JPG of PNG"
+msgstr "Not a PDF, JPG or PNG"
 
 #: src/components/audit-codes.ts
 msgid "Geen serverbeheerder meer"
@@ -3037,6 +3146,10 @@ msgstr "Choose a label"
 msgid "Kies een persoon"
 msgstr "Choose a person"
 
+#: src/routes/scan-folder.tsx
+msgid "Kies een persoon of afdeling"
+msgstr "Choose a person or department"
+
 #: src/components/rule-templates.tsx
 msgid "Kies een voorbeeld en vul de gemarkeerde delen in. Er wordt niets opgeslagen tot je op Opslaan drukt."
 msgstr "Choose an example and fill in the highlighted parts. Nothing is saved until you press Save."
@@ -3063,6 +3176,10 @@ msgstr "Done"
 msgid "Klaar: {description}"
 msgstr "Done: {description}"
 
+#: src/routes/scan-folder.tsx
+msgid "Kleine letters, cijfers en streepjes. Je scanner zet de brieven in deze map in de scanmap van de server."
+msgstr "Lower case letters, digits and hyphens. Your scanner puts the letters in this folder inside the server's scan folder."
+
 #: src/routes/labels.tsx
 msgid "Kleur"
 msgstr "Color"
@@ -3083,6 +3200,10 @@ msgstr "Copying does not work. Copy the link above yourself."
 msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 msgstr "Copying does not work. Copy the text below yourself."
 
+#: src/routes/scan-folder.tsx
+msgid "Koppel aan …"
+msgstr "Link to …"
+
 #: src/routes/pair-app.tsx
 msgid "Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven."
 msgstr "Pair the Brievie app on your phone with this server and see which phones are paired. With the app you scan letters."
@@ -3095,6 +3216,10 @@ msgstr "Pairing code"
 msgid "Koppelcode maken"
 msgstr "Create pairing code"
 
+#: src/routes/scan-folder.tsx
+msgid "Koppelen"
+msgstr "Link"
+
 #: src/routes/pair-app.tsx
 msgid "Koppelgegevens"
 msgstr "Pairing details"
@@ -3106,6 +3231,14 @@ msgstr "Breadcrumb"
 #: src/components/person-actions.tsx
 msgid "Laat de post beheren door"
 msgstr "Let the mail be managed by"
+
+#: src/routes/settings.tsx
+msgid "Laat een scanner brieven in een map op je NAS zetten; Brievie haalt ze op."
+msgstr "Let a scanner put letters in a folder on your NAS; Brievie takes them in."
+
+#: src/routes/scan-folder.tsx
+msgid "Laat een scanner brieven in een map op je NAS zetten. Brievie haalt ze daar elke minuut op."
+msgstr "Let a scanner put letters in a folder on your NAS. Brievie takes them in from there every minute."
 
 #: src/routes/recovery-sheet.tsx
 msgid "Laat niemand de sleutel zien. Wie de sleutel en een back-up heeft, kan je documenten lezen."
@@ -3313,6 +3446,30 @@ msgstr "Create a label first."
 msgid "Mail"
 msgstr "Email"
 
+#: src/routes/scan-folder.tsx
+msgid "Map"
+msgstr "Folder"
+
+#: src/routes/scan-folder.tsx
+msgid "Map {name} niet meer lezen?"
+msgstr "Stop reading folder {name}?"
+
+#: src/routes/scan-folder.tsx
+msgid "Map maken"
+msgstr "Make folder"
+
+#: src/routes/scan-folder.tsx
+msgid "Map maken: {name}"
+msgstr "Make folder: {name}"
+
+#: src/routes/scan-folder.tsx
+msgid "Mappen"
+msgstr "Folders"
+
+#: src/routes/scan-folder.tsx
+msgid "Mappen per persoon en afdeling"
+msgstr "Folders per person and department"
+
 #: src/routes/document.tsx
 msgid "Markeer als gelezen"
 msgstr "Mark as read"
@@ -3419,6 +3576,10 @@ msgstr "My tasks, {mine} open"
 msgid "Mijn taken, {mine} open, waarvan {late} te laat"
 msgstr "My tasks, {mine} open, {late} overdue"
 
+#: src/routes/scan-folder.tsx
+msgid "Mislukt"
+msgstr "Failed"
+
 #: src/components/ai-status-line.tsx
 msgid "Mistral in Frankrijk ({host})"
 msgstr "Mistral in France ({host})"
@@ -3471,6 +3632,10 @@ msgstr "Name and spellings"
 #: src/routes/search.tsx
 msgid "Naam kiezen"
 msgstr "Choose a name"
+
+#: src/routes/scan-folder.tsx
+msgid "Naam van de map"
+msgstr "Name of the folder"
 
 #: src/routes/setup.tsx
 msgid "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
@@ -3549,6 +3714,14 @@ msgstr "Not mine any more"
 msgid "Niet meer aan mij: {description}"
 msgstr "Not mine any more: {description}"
 
+#: src/routes/scan-folder.tsx
+msgid "Niet meer lezen"
+msgstr "Stop reading"
+
+#: src/routes/scan-folder.tsx
+msgid "Niet meer lezen: {name}"
+msgstr "Stop reading: {name}"
+
 #: src/routes/document.tsx
 msgid "Niet meer privé"
 msgstr "No longer private"
@@ -3572,6 +3745,10 @@ msgstr "Stop waiting"
 #: src/components/task-actions.tsx
 msgid "Niet meer wachten: {description}"
 msgstr "Stop waiting: {description}"
+
+#: src/routes/scan-folder.tsx
+msgid "Niet te verwerken"
+msgstr "Cannot be processed"
 
 #: src/components/person-actions.tsx
 msgid "Niet te zien"
@@ -3668,6 +3845,10 @@ msgstr "none yet"
 #: src/routes/archive.tsx
 msgid "Nog niets in je archief."
 msgstr "Nothing in your archive yet."
+
+#: src/routes/scan-folder.tsx
+msgid "Nog zonder map"
+msgstr "No folder yet"
 
 #: src/routes/departments.tsx
 #: src/routes/people-detail.tsx
@@ -3927,6 +4108,7 @@ msgid "Opgeslagen"
 msgstr "Saved"
 
 #: src/routes/ai.tsx
+#: src/routes/scan-folder.tsx
 msgid "Opgeslagen."
 msgstr "Saved."
 
@@ -3967,6 +4149,7 @@ msgstr "Send again: {name}"
 #: src/routes/document.tsx
 #: src/routes/labels.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/scan-folder.tsx
 msgid "Opslaan"
 msgstr "Save"
 
@@ -4052,6 +4235,10 @@ msgstr "Person unlinked from an account"
 #: src/routes/people-detail.tsx
 msgid "Persoon niet gevonden"
 msgstr "Person not found"
+
+#: src/routes/scan-folder.tsx
+msgid "Persoon of afdeling is er niet meer"
+msgstr "Person or department is no longer there"
 
 #: src/components/audit-codes.ts
 msgid "Persoon toegevoegd"
@@ -4165,6 +4352,7 @@ msgid "Rechtstreeks verbonden met"
 msgstr "Directly connected to"
 
 #: src/components/emergency-dialog.tsx
+#: src/routes/scan-folder.tsx
 msgid "Reden"
 msgstr "Reason"
 
@@ -4286,6 +4474,15 @@ msgstr "Scan a new letter with the Brievie app. You find earlier letters in"
 msgid "Scan met de Brievie-app"
 msgstr "Scan with the Brievie app"
 
+#: src/routes/scan-folder.tsx
+#: src/routes/settings.tsx
+msgid "Scanmap"
+msgstr "Scan folder"
+
+#: src/routes/scan-folder.tsx
+msgid "Scanmap aan"
+msgstr "Scan folder on"
+
 #: src/components/second-factor-setup.tsx
 msgid "Scannen lukt niet? Typ deze sleutel in de app:"
 msgstr "Scanning does not work? Type this key into the app:"
@@ -4358,6 +4555,10 @@ msgstr "Kind of task"
 #: src/routes/rule-editor.tsx
 msgid "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
 msgstr "Is 'File letters under persons and labels automatically' on under AI? Then Brievie still adds a suggested label by itself if the rule found the word in the sender or at the top of the letter, or if the AI is sure of the same label. Is the word only further down and is the AI not sure? Then it stays a suggestion."
+
+#: src/routes/scan-folder.tsx
+msgid "Stand"
+msgstr "State"
 
 #: src/components/audit-codes.ts
 msgid "Standaard Thuis of Organisatie overgenomen"
@@ -4442,10 +4643,18 @@ msgstr "Tasks"
 msgid "Taken die bij jou horen. Taken van je afdeling en post zonder naam staan bij Op te pakken."
 msgstr "Tasks that are yours. Tasks of your department and mail without a name are under To pick up."
 
+#: src/routes/scan-folder.tsx
+msgid "Te groot"
+msgstr "Too large"
+
 #: src/components/letter-status.tsx
 #: src/task-time.ts
 msgid "Te laat"
 msgstr "Overdue"
+
+#: src/routes/scan-folder.tsx
+msgid "Te veel pagina's"
+msgstr "Too many pages"
 
 #: src/routes/document.tsx
 msgid "Tekst van de brief"
@@ -4963,6 +5172,7 @@ msgid "Voeg eerst een persoon toe."
 msgstr "Add a person first."
 
 #: src/components/open-invitations.tsx
+#: src/routes/scan-folder.tsx
 msgid "Voor"
 msgstr "For"
 
@@ -5088,6 +5298,10 @@ msgstr "What must a letter match? The text searches the whole letter: a letter t
 msgid "Waarde"
 msgstr "Value"
 
+#: src/routes/scan-folder.tsx
+msgid "Wacht"
+msgstr "Waiting"
+
 #: src/components/letter-status.tsx
 #: src/routes/archive.tsx
 #: src/task-time.ts
@@ -5114,6 +5328,10 @@ msgstr "Waiting for a reply: {description}"
 #: src/components/waiting-dialog.tsx
 msgid "Wacht op reactie…"
 msgstr "Waiting for a reply…"
+
+#: src/routes/scan-folder.tsx
+msgid "Wacht: afdelingen staan uit"
+msgstr "Waiting: departments are off"
 
 #: src/components/upload-documents.tsx
 msgid "Wacht…"
@@ -5183,6 +5401,10 @@ msgstr "We can't reach the server. Check your connection and try again."
 #: src/routes/people-detail.tsx
 msgid "We kunnen deze persoon niet vinden."
 msgstr "We cannot find this person."
+
+#: src/routes/scan-folder.tsx
+msgid "Weer lezen"
+msgstr "Read again"
 
 #: src/routes/tasks.tsx
 msgid "Weer open: {description}"
@@ -5374,9 +5596,17 @@ msgstr "Clear filters"
 msgid "Wissen"
 msgstr "Clear"
 
+#: src/routes/scan-folder.tsx
+msgid "Wordt gelezen"
+msgstr "Being read"
+
 #: src/components/export-panel.tsx
 msgid "Wordt gemaakt…"
 msgstr "Being made…"
+
+#: src/routes/scan-folder.tsx
+msgid "Wordt niet gelezen"
+msgstr "Not read"
 
 #: src/routes/trash.tsx
 msgid "Wordt vandaag gewist"
@@ -5409,6 +5639,10 @@ msgstr "Switch it on under Settings."
 #: src/routes/server-external-access.tsx
 msgid "Zet het alleen in BRIEVIE_TRUSTED_PROXIES als dit je eigen proxy is: elk apparaat in je netwerk kan zo'n verzoek sturen."
 msgstr "Put it in BRIEVIE_TRUSTED_PROXIES only if this is your own proxy: any device in your network can send such a request."
+
+#: src/routes/scan-folder.tsx
+msgid "Zet je scanner op één bestand per brief. Elke PDF, JPG of PNG in de map wordt een brief in Brievie."
+msgstr "Set your scanner to one file per letter. Every PDF, JPG or PNG in the folder becomes a letter in Brievie."
 
 #: src/routes/visibility.tsx
 msgid "Zet post op naam van een afdeling, zoals Finance. Wie in die afdeling zit, ziet die post."
@@ -5463,6 +5697,10 @@ msgstr "How to set up a backup"
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"
 msgstr "How a rule works"
+
+#: src/routes/scan-folder.tsx
+msgid "Zo werkt het"
+msgstr "How it works"
 
 #: src/components/visibility-preview-dialog.tsx
 msgid "Zo wordt het"

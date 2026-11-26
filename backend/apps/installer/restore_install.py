@@ -29,7 +29,7 @@ STAGING = Path("/out")
 STAGING_FILES = ("env", "manifest.json")
 ADMIN = "docker compose --profile admin run --rm admin python manage.py"
 COMMAND = f"{ADMIN} restore_install"
-STOP_COMMAND = "docker compose stop api worker keeper caddy"
+STOP_COMMAND = "docker compose stop api worker intake keeper caddy"
 START_COMMAND = "docker compose up -d"
 
 
@@ -82,7 +82,7 @@ def run(
         complain(
             _(
                 "Brievie draait nog. Stop eerst de services die de database gebruiken: "
-                "docker compose stop api worker keeper caddy. Er is niets veranderd."
+                "docker compose stop api worker intake keeper caddy. Er is niets veranderd."
             )
         )
         return 1

@@ -321,6 +321,71 @@ seconds to read, up to a minute at most; one file gets at most 10 minutes in all
 upload takes roughly twice the space of a scan; an upload is refused while less than 1 GB
 would stay free on the documents' disk (`BRIEVIE_UPLOAD_FREE_RESERVE_BYTES`).
 
+## 11b. The scan folder ("Scanmap")
+
+An office scanner can put its PDFs in a folder on the NAS; Brievie takes each file in and
+removes it from the folder. Off by default. Only the `intake` service sees the folder: it
+checks every file, keeps it sealed like an upload and hands it to the worker. Its network
+reaches PostgreSQL only, never the internet; its disk is read-only; it has no capabilities.
+
+1. Pick one folder for the whole server, for example `/volume1/scans/brievie`. All
+   workspaces that use the scan folder get a folder inside it, so everyone with rights on
+   it can put a letter in every workspace: **one folder means one level of trust**. Use a
+   separate server, or do not use the scan folder, for workspaces that must stay apart.
+2. Give the group `users` (gid 100) read and write on that folder, deleting included. The
+   `intake` service runs as uid 10001 with that group added (`BRIEVIE_SCAN_GID` when you
+   used another group).
+   - **Synology, without SSH:** DSM → Configuratiescherm → Gedeelde map: make a shared folder
+     (e.g. `scans`) and a folder `brievie` in it. Make a DSM user `scanner` with read/write on
+     `scans` only. File Station → `brievie` → Eigenschappen → Machtiging: the group `users`
+     read and write, including "Verwijderen" for subfolders and files. In Container Manager →
+     Project → Brievie: put `BRIEVIE_SCAN_DIR=/volume1/scans/brievie` in the `.env` and build
+     the project again.
+   - **Linux:** `sudo chgrp users /srv/scans/brievie && sudo chmod g+rwxs /srv/scans/brievie`
+     (the `s` makes new files keep the group).
+3. Set `BRIEVIE_SCAN_DIR` in `deploy/.env` (or in the compose-only file's environment) and
+   start Brievie again (`./brievie start`, or `docker compose up -d`).
+4. In Brievie, as a workspace admin: **Instellingen → Scanmap**, switch it on and keep or
+   change the folder name (lower case, digits and `-`, unique on the server). The page shows
+   what the `intake` service sees: "De scanmap werkt.", or which owner and group the folder
+   has when it cannot read or write it.
+5. In the scanner: "scan naar map" over SMB to `\\<nas>\scans\brievie\<folder name>`, as
+   the user `scanner`, **one file per letter**, PDF.
+
+What happens to a file: it is taken once its size and time did not change for a minute;
+it becomes a letter on nobody's name (as an upload, but nobody "scanned" it); Brievie reads
+the sealed copy back and only then removes the file from the share. A removed file is **not**
+in Synology's `#recycle`: the recycle bin only covers deletions through SMB, AFP or File
+Station. The letter is in Brievie, with its original downloadable. A file Brievie cannot
+read goes to `mislukt/` in the workspace folder, with `<name>.reden.txt` beside it that
+says why; Brievie never moves or removes anything in `mislukt/`: put a file back to try
+again, or remove it yourself. At most 20 files per workspace per minute.
+
+Brievie uses as a workspace's folder only a folder it makes itself or one that is empty:
+an existing folder with files or folders in it is never taken in, whatever name an admin
+types (the page says so). The first workspace that reads a folder writes
+`.brievie-werkruimte` in it; a folder that
+another workspace claimed is never read (the page says so), also after that workspace chose
+another name, so its old letters never land elsewhere. Remove that file by hand to give the
+folder to another workspace.
+
+**Folders per person and department** ("Mappen per persoon en afdeling", off by default):
+Brievie makes a folder for every person with an account and for every department while
+departments are on. A letter in such a folder gets that person or department as its
+addressee directly (automatic, undoable in its history); who else sees it follows the
+workspace's "Wie ziet wat". A person without an account gets a folder only when an admin
+makes one on the page. A folder Brievie does not know (made by hand with another name) is
+never read and nothing in it is moved: the page lists it with its number of files and lets
+an admin link it to a person or department. Brievie never renames or removes a folder.
+
+**SMB1:** many older scanners only speak SMB1. Do not switch SMB1 on in DSM (it is
+insecure); such a scanner can often send by FTP(S) to DSM instead, into the same folder.
+
+**Not verified yet:** that a DSM ACL granting `users` read and write is honoured for the
+container (supplementary gid 100), and that files the scanner makes can be removed by that
+group. When the page says it cannot read or write, note the owner and group it shows and
+the Machtiging screen; the fix is the folder's rights or `BRIEVIE_SCAN_GID`.
+
 ## 12. Not verified yet
 
 Tested on GitHub's Linux runners and on a Mac with Docker Desktop: a restore on an
@@ -815,10 +880,11 @@ lists them all).
 
 What happened at the first start: `init-secrets` (no network) made the keys in volumes: one
 vault (`secrets`) and a volume per service (`secrets-postgres`, `secrets-init`, `secrets-api`,
-`secrets-keeper`), each with only the files that service needs: `init` has every password but no
-master key (no migration or back-up step decrypts a document), the keeper has no master
-key, the api no superuser or owner password, and PostgreSQL is on a network without a
-way out. `init` then made the database roles, checked that this version may start on this
+`secrets-keeper`, `secrets-intake`), each with only the files that service needs: `init` has every
+password but no master key (no migration or back-up step decrypts a document), the keeper has no
+master key, the api no superuser or owner password, the scan folder's `intake` no back-up
+password, and PostgreSQL is on a network without a way out. `intake` has a network of its own
+that reaches PostgreSQL only. `init` then made the database roles, checked that this version may start on this
 data, and ran the migrations. No secret is in the compose file, in `docker compose config`,
 in `docker inspect`, in a log or in a process list (the CI job `compose-stack` checks it).
 
@@ -870,7 +936,7 @@ past `min_upgrade_from` ("Werk eerst bij naar ..."), another PostgreSQL major, a
 file of another revision ("Dit compose-bestand is te oud") and too little free space. A
 refusal changes no data: `init` stops with exit 1 and `docker compose logs init` has the
 sentence (Portainer and Synology show `init` as "Exited (1)"). **The service is down until you
-fix it:** Compose has already taken the old api, worker, keeper and caddy down to make the new
+fix it:** Compose has already taken the old api, worker, intake, keeper and caddy down to make the new
 ones (they show as "Created"), and they wait for `init`. Put the old version number back and
 start again, and the same server comes back (CI proves this with a refused jump and a refused
 step back). This is different from `./brievie update`, which checks before it stops anything.
@@ -890,7 +956,7 @@ put the old version number in the file, then type, one by one (these are the com
 `init` prints; a test keeps them equal):
 
 ```
-docker compose stop api worker keeper caddy
+docker compose stop api worker intake keeper caddy
 BRIEVIE_BACKUP_DIR=update-backup docker compose --profile admin run --rm admin python manage.py restore_install pre-update-<version> --replace
 docker compose up -d
 ```
@@ -903,7 +969,7 @@ file of the release.
 
 ### Restoring
 
-Stop `api worker keeper caddy`, then
+Stop `api worker intake keeper caddy`, then
 `docker compose --profile admin run --rm admin python manage.py restore_install [<run id or pre-update-X.Y.Z>] [--replace]`.
 It refuses while any of those still holds a database session, and `--replace` is needed when
 there is data. The back-up is opened with the master key of the vault. **On a new machine
@@ -917,7 +983,7 @@ back-up folder is not one of these volumes. Then, one by one:
 
 ```
 docker compose down
-docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_pgdata brievie_documents brievie_backup-config
+docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_secrets-intake brievie_pgdata brievie_documents brievie_backup-config
 ```
 
 (the project is called `brievie`; check with `docker volume ls`). Your back-up folder, the compose file
@@ -1186,6 +1252,8 @@ V VPN, T tunnel, P own proxy (empty = default or not used).
 | `BRIEVIE_BACKUP_HOUR` | hour of the nightly back-up | `2` | | | | |
 | `BRIEVIE_ADOPT_VERSION` | compose: moving from `./brievie`, the version that runs | empty | | | | |
 | `BRIEVIE_VERSION` | the version (compose: change it to update; `./brievie` writes it) | the release | | | | |
+| `BRIEVIE_SCAN_DIR` | the scan folder on this server (only the `intake` service sees it) | empty: none | | | | |
+| `BRIEVIE_SCAN_GID` | the group that may read and write the scan folder | `100` | | | | |
 | `BRIEVIE_AUDIT_RETENTION_DAYS` | days the audit log keeps rows (at least 90) | `365` | | | | |
 | `BRIEVIE_SESSION_IDLE_DAYS` / `BRIEVIE_SESSION_MAX_DAYS` | web session limits | `14` / `90` | | | | |
 | `BRIEVIE_AI_AUTOPILOT_ALLOWED` | may workspaces switch on the autopilot | `true` | | | | |

@@ -59,6 +59,7 @@ services:
       - secrets-api:/out/api
       - secrets-keeper:/out/keeper
       - secrets-init:/out/init
+      - secrets-intake:/out/intake
       - backup-config:/data/backup-config
       - documents:/data/documents:ro
       - pgdata:/var/lib/postgresql:ro
@@ -73,9 +74,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
       - secrets-postgres:/run/brievie:ro
-    # Not published, and on a network without a way out: only Brievie's own services
-    # reach it.
-    networks: [db]
+    # Not published, and on networks without a way out: only Brievie's own services
+    # reach it. `scan` carries the intake service and PostgreSQL only.
+    networks: [db, scan]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 2s
@@ -177,6 +178,8 @@ services:
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
       BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
       BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
+      # Only whether the server has a scan folder (the Scanmap page); never mounted here.
+      BRIEVIE_SCAN_DIR_SET: ${BRIEVIE_SCAN_DIR:+true}
       # For the recovery sheet that a server admin downloads in the web interface: where
       # the back-ups go (no credentials) and the back-up password (a file).
       BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
@@ -227,6 +230,42 @@ services:
       - secrets-api:/run/brievie:ro
       - documents:/data/documents
     networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # The scan folder ("Scanmap"): the only service that sees the share. It seals each file
+  # into Brievie and queues it for the worker; it reaches PostgreSQL only, never the internet.
+  intake:
+    <<: *backend
+    depends_on:
+      init: { condition: service_completed_successfully }
+    stop_grace_period: 1m
+    command:
+      - sh
+      - -c
+      - python manage.py check_master_key && exec python manage.py procrastinate worker --queues intake
+    environment:
+      <<: *settings
+      DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      BRIEVIE_MASTER_KEY_FILE: /run/brievie/master_key
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
+      BRIEVIE_SCAN_DIR_SET: ${BRIEVIE_SCAN_DIR:+true}
+    # <-- Optional: the group that may read and write your scan folder (100 is "users" on a
+    # Synology). Set BRIEVIE_SCAN_DIR to the folder, for example /volume1/scans/brievie.
+    group_add: ["${BRIEVIE_SCAN_GID:-100}"]
+    volumes:
+      # Its own keys: the secret key, the app password and the master key, no back-up password.
+      - secrets-intake:/run/brievie:ro
+      - documents:/data/documents
+      - ${BRIEVIE_SCAN_DIR:-scan-unset}:/scan
+    # Its own network with PostgreSQL only: never the api, past Caddy (review of PR #64).
+    networks: [scan]
+    read_only: true
+    # The PDF checker's answer file.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
@@ -327,7 +366,7 @@ services:
 
   # One-off maintenance; never started by `up`:
   #   docker compose --profile admin run --rm admin python manage.py <command>
-  # For example a restore (stop api, worker, keeper and caddy first):
+  # For example a restore (stop api, worker, intake, keeper and caddy first):
   #   docker compose --profile admin run --rm admin python manage.py restore_install --replace
   # Root, because a restore writes every volume; the only container that holds both the
   # master key and the superuser password.
@@ -369,6 +408,9 @@ networks:
   db:
     internal: true
   edge: {}
+  # The intake service and PostgreSQL only: no way out to the internet.
+  scan:
+    internal: true
   # Caddy and the optional cloudflared only (security review of PR #53).
   tunnel: {}
 
@@ -376,19 +418,22 @@ volumes:
   # The data. `docker compose down -v` removes all of it: never type -v.
   pgdata:
   documents:
-  # The keys. `secrets` holds all of them; the next three hold what each service needs.
+  # The keys. `secrets` holds all of them; the next five hold what each service needs.
   # Keep your master key on the recovery sheet as well: without it the documents are lost.
   secrets:
   secrets-postgres:
   secrets-api:
   secrets-keeper:
   secrets-init:
+  secrets-intake:
   backup-config:
   caddy-data:
   caddy-config:
   caddy-ca:
   caddy-authority:
   backup-unset:
+  # The scan folder while BRIEVIE_SCAN_DIR is unset.
+  scan-unset:
   # An empty folder for BRIEVIE_BACKUP_SECRETS_DIR (the files of a remote destination's secrets).
   backup-secrets-unset:
   # The back-up before an update, on a server without a back-up folder.

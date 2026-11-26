@@ -417,6 +417,13 @@ BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
 # Encrypted document files. A volume in Compose; never a path elsewhere in the code.
 BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
 
+# The scan folder (intake spec S 3): compose mounts the share at BRIEVIE_SCAN_ROOT in the
+# `intake` service only; BRIEVIE_SCAN_DIR_SET says whether it is a real folder (the api
+# reads it to offer the Scanmap page). A file is taken once it is unchanged this long.
+BRIEVIE_SCAN_ROOT: str = env.str("BRIEVIE_SCAN_ROOT", default="/scan")
+BRIEVIE_SCAN_DIR_SET: bool = env.bool("BRIEVIE_SCAN_DIR_SET", default=False)
+BRIEVIE_SCAN_STABLE_SECONDS: int = env.int("BRIEVIE_SCAN_STABLE_SECONDS", default=60)
+
 # Back-up destination (apps.backup.destination reads these lazily). The password is
 # derived in the container (`manage.py derive_backup_password`) and may be absent on
 # a first run. A folder (compose mounts it at BRIEVIE_BACKUP_MOUNT) or a remote

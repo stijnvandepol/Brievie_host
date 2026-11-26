@@ -289,6 +289,11 @@ def test_app_operations_exist_and_need_no_sign_in() -> None:
         # download are web-session only, closed on the public route.
         "uploadDocumentFile",
         "downloadDocumentOriginal",
+        # The Scanmap page (intake plan Task 13): workspace admins in the web only.
+        "getScanFolder",
+        "updateScanFolder",
+        "addScanFolder",
+        "removeScanFolder",
     ],
 )
 def test_sign_in_and_session_operations_stay_closed(operation_id: str) -> None:

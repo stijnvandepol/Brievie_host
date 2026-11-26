@@ -38,6 +38,24 @@ database enforces this (row-level security), not only the screens, and every cha
 lets somebody see more is previewed and confirmed by an admin. Every member reads who can
 see their own post under **Wie kan mijn post zien?**, and on a letter who can see it.
 
+### The scan folder
+
+A letter on the scan folder's share is **not encrypted** from the moment the scanner writes
+it until Brievie has taken it in and removed it: normally one to two minutes, longer while
+the `intake` service is down, and indefinitely for a file in `mislukt/` (Brievie never
+touches those) or in a folder Brievie does not read. Advice: give rights on the folder to
+the scanner's account and the group `users` only, not to every staff member; switch SMB
+encryption on in DSM; the Scanmap page warns when files wait longer than an hour and lists
+what is in `mislukt/`. One folder serves every workspace on the server, so whoever can write
+to it can put a letter in any of them, and on anyone's name through a person's folder.
+
+What Brievie keeps about a file on the share: its path (exact, to find it again), size,
+time and file number, and the reason a file was refused; rows of imported files are removed
+after 30 days. Names of files and folders are BSN-masked before the Scanmap page shows them
+and never appear in a log or an audit row; the audit log records who switched the scan
+folder on or off, not the folder's name. The original is sealed before it is written to the
+`documents` volume, and its text is BSN-masked like any other letter.
+
 ## What leaves the server
 
 | AI setting of the workspace | What is sent, and where |

@@ -20,7 +20,7 @@ from apps.installer.init_secrets import (
 )
 
 OWNER = (os.getuid(), os.getgid())
-ROLES = ("postgres", "init", "api", "keeper")
+ROLES = ("postgres", "init", "api", "keeper", "intake")
 
 
 def make_layout(root: Path) -> Layout:
@@ -501,3 +501,20 @@ def test_an_unreadable_data_folder_refuses_instead_of_looking_empty(
     assert names_in(layout.vault) == set()
     for role in ROLES:
         assert names_in(layout.out[role]) == set()
+
+
+# Security review of PR #64 (M5)
+
+
+def test_intake_gets_the_master_key_but_no_backup_password(tmp_path: Path) -> None:
+    layout = make_layout(tmp_path)
+    run(layout, {})
+    assert names_in(layout.out["intake"]) == {"secret_key", "app_password", "master_key"}
+
+
+def test_a_compose_file_without_the_intake_volume_still_works(tmp_path: Path) -> None:
+    layout = make_layout(tmp_path)
+    layout.out["intake"].rmdir()
+    run(layout, {})
+    assert not layout.out["intake"].exists()
+    assert "master_key" in names_in(layout.out["api"])

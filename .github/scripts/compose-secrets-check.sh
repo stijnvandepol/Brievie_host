@@ -84,6 +84,8 @@ check_roles() {
 	test "$init" = "app_password backup_db_password backup_password owner_password postgres_password secret_key "
 	keeper=$(in_volume secrets-keeper 'ls /v' | tr '\n' ' ')
 	test "$keeper" = "app_password backup_db_password backup_password secret_key "
+	intake=$(in_volume secrets-intake 'ls /v' | tr '\n' ' ')
+	test "$intake" = "app_password master_key secret_key "
 	if grep -q master_key <<<"$keeper"; then
 		echo "The keeper's volume holds the master key." >&2
 		exit 1
@@ -111,7 +113,12 @@ check_network() {
 	postgres=$($COMPOSE ps -q postgres)
 	test -z "$(docker port "$postgres")"
 	networks=$(docker inspect "$postgres" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}')
-	test "$networks" = "${project}_db "
+	test "$networks" = "${project}_db ${project}_scan "
+	test "$(docker network inspect "${project}_scan" --format '{{.Internal}}')" = true
+	# The intake service reaches PostgreSQL only (review of PR #64, M5).
+	intake=$($COMPOSE ps -q intake)
+	networks=$(docker inspect "$intake" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}')
+	test "$networks" = "${project}_scan "
 }
 
 collect_outputs() {
