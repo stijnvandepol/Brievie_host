@@ -20,6 +20,7 @@ from apps.intake.scan_files import (
     Fingerprint,
     ImportedFile,
     ScanRefusedError,
+    claim_folder,
     ensure_folder,
     list_candidates,
     list_failed,
@@ -424,3 +425,40 @@ def test_the_module_never_removes_a_directory_or_globs() -> None:
     source = Path(scan_files.__file__).read_text()
     for word in ("rmtree", "rmdir", "glob", "removedirs"):
         assert word not in source, word
+
+
+# Review fixes (final review of the branch)
+
+
+def test_a_long_name_moves_with_a_shorter_name(root_fd: int, scan_root: Path) -> None:
+    name = "b" * 240 + ".pdf"
+    write(scan_root / "kantoor" / name)
+    moved = move_to_failed(root_fd, ("kantoor", name), reason_text="Kapot.")
+    assert moved[:2] == ("kantoor", "mislukt")
+    failed = scan_root / "kantoor" / "mislukt"
+    assert (failed / moved[2]).exists()
+    assert (failed / (moved[2] + ".reden.txt")).exists()
+    assert moved[2].endswith(".pdf")
+    assert not (scan_root / "kantoor" / name).exists()
+    assert len(list(failed.iterdir())) == 2
+
+
+def test_a_name_that_is_not_utf8_is_refused() -> None:
+    assert not scan_files.valid_name("brief\udcff.pdf")
+    assert scan_files.valid_name("brief.pdf")
+
+
+def test_a_workspace_claims_its_folder(root_fd: int, scan_root: Path) -> None:
+    (scan_root / "kantoor").mkdir()
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een")
+    assert claim_folder(root_fd, ("kantoor",), "werkruimte-een")
+    assert not claim_folder(root_fd, ("kantoor",), "werkruimte-twee")
+    assert (scan_root / "kantoor" / ".brievie-werkruimte").read_text() == "werkruimte-een\n"
+
+
+def test_a_linked_claim_is_refused(root_fd: int, scan_root: Path, tmp_path: Path) -> None:
+    (scan_root / "kantoor").mkdir()
+    outside = tmp_path / "claim"
+    outside.write_text("werkruimte-een\n")
+    (scan_root / "kantoor" / ".brievie-werkruimte").symlink_to(outside)
+    assert not claim_folder(root_fd, ("kantoor",), "werkruimte-een")

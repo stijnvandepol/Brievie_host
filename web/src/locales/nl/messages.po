@@ -1854,6 +1854,10 @@ msgstr "Deze dubbele brieven zijn er niet (meer)."
 msgid "Deze link werkt alleen op je thuisnetwerk."
 msgstr "Deze link werkt alleen op je thuisnetwerk."
 
+#: src/routes/scan-folder.tsx
+msgid "Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt."
+msgstr "Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt."
+
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
 msgstr "Deze pagina bestaat niet."

@@ -1854,6 +1854,10 @@ msgstr "These duplicate letters are not here (any more)."
 msgid "Deze link werkt alleen op je thuisnetwerk."
 msgstr "This link only works on your home network."
 
+#: src/routes/scan-folder.tsx
+msgid "Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt."
+msgstr "This folder belongs to another workspace on this server. Choose another name, or remove the file .brievie-werkruimte from the folder if that workspace no longer uses it."
+
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
 msgstr "This page does not exist."

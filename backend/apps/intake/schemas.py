@@ -46,7 +46,8 @@ class ScanFolderOut(Schema):
     # The name the page proposes when none is chosen yet (from the workspace's name).
     suggested_name: str = ""
     per_person: bool = False
-    # The intake service's own look: ok, missing, not_readable, not_writable, or unknown
+    # The intake service's own look: ok, missing, not_readable, not_writable, taken (the
+    # folder belongs to another workspace: `.brievie-werkruimte` names another), or unknown
     # (no look in the last 5 minutes: the service does not run).
     check: str = "unknown"
     owner_uid: int = 0

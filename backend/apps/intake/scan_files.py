@@ -38,6 +38,7 @@ __all__ = [
     "ProbeResult",
     "RelPath",
     "ScanRefusedError",
+    "claim_folder",
     "count_candidates",
     "ensure_folder",
     "list_candidates",
@@ -48,6 +49,7 @@ __all__ = [
     "probe",
     "read_candidate",
     "remove_imported",
+    "valid_name",
 ]
 
 # The workspace folder and at most two names below it.
@@ -57,12 +59,17 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOCTTY
 _NEW_FILE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
 _FOLDER_MODE = 0o2770
-# A file Brievie writes on the share: the reason beside a refused file is read by the
-# office (group), the placeholder and the probe by nobody. Removing them needs rights on
-# the folder, not on the file.
-_REASON_MODE = 0o640
+# Files Brievie writes on the share are its own only (0600). Removing them needs rights on
+# the folder, not on the file; on a NAS the folder's inherited ACL decides who reads the
+# reason file, and the Scanmap page shows every reason too.
 _PRIVATE_MODE = 0o600
+_REASON_MODE = _PRIVATE_MODE
 _PROBE_NAME = ".brievie-check"
+_CLAIM_NAME = ".brievie-werkruimte"
+_CLAIM_MAX = 200
+# A name on most filesystems is at most 255 bytes; a moved file needs room for " (999)"
+# and its reason file for ".reden.txt".
+_NAME_MAX_BYTES = 255
 _REASON_SUFFIX = ".reden.txt"
 _MAX_NUMBER = 1000
 
@@ -105,15 +112,23 @@ class ProbeResult:
     owner_gid: int
 
 
-def _valid_name(name: str) -> bool:
-    return bool(name) and name not in (".", "..") and "/" not in name and "\x00" not in name
+def valid_name(name: str) -> bool:
+    """One name of a path: not empty, not `.` or `..`, no `/` or NUL, and valid UTF-8 (a
+    name from an old scanner in another encoding cannot be stored; it is left alone)."""
+    if not name or name in (".", "..") or "/" in name or "\x00" in name:
+        return False
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def _check(path: RelPath) -> None:
     if not 1 <= len(path) <= _MAX_DEPTH:
         raise ScanRefusedError("bad_path")
     for name in path:
-        if not isinstance(name, str) or not _valid_name(name) or name.startswith("."):
+        if not isinstance(name, str) or not valid_name(name) or name.startswith("."):
             raise ScanRefusedError("bad_path")
 
 
@@ -214,7 +229,7 @@ def _entries(fd: int) -> list[tuple[str, os.stat_result]]:
     """Names in the directory with their own `lstat` (a link is reported as a link)."""
     found: list[tuple[str, os.stat_result]] = []
     for name in sorted(os.listdir(fd)):
-        if not _valid_name(name) or name.startswith("."):
+        if not valid_name(name) or name.startswith("."):
             continue
         try:
             found.append((name, os.stat(name, dir_fd=fd, follow_symlinks=False)))
@@ -311,13 +326,18 @@ def remove_imported(root_fd: int, imported: ImportedFile) -> None:
         os.unlink(path[-1], dir_fd=parent)
 
 
+def _shortened(stem: str, budget: int) -> str:
+    """`stem` cut to at most `budget` bytes of UTF-8, on a character boundary."""
+    return stem.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+
+
 def _numbered(name: str, number: int) -> str:
-    if number == 1:
-        return name
     stem, dot, extension = name.rpartition(".")
     if not dot or not stem:
-        return f"{name} ({number})"
-    return f"{stem} ({number}).{extension}"
+        stem, extension = name, ""
+    tail = (f" ({number})" if number > 1 else "") + (f".{extension}" if extension else "")
+    budget = _NAME_MAX_BYTES - len(_REASON_SUFFIX) - len(" (999)") - len(extension) - 1
+    return _shortened(stem, max(budget, 1)) + tail
 
 
 def _remove_own(fd: int, name: str, inode: int) -> None:
@@ -359,6 +379,8 @@ def move_to_failed(root_fd: int, path: RelPath, *, reason_text: str) -> RelPath:
                     placeholder = os.open(name, _NEW_FILE_FLAGS, _PRIVATE_MODE, dir_fd=target)
                 except FileExistsError:
                     continue
+                except OSError:
+                    raise ScanRefusedError("no_free_name") from None
                 placeholder_inode = os.fstat(placeholder).st_ino
                 os.close(placeholder)
                 try:
@@ -366,6 +388,9 @@ def move_to_failed(root_fd: int, path: RelPath, *, reason_text: str) -> RelPath:
                 except FileExistsError:
                     _remove_own(target, name, placeholder_inode)
                     continue
+                except OSError:
+                    _remove_own(target, name, placeholder_inode)
+                    raise ScanRefusedError("no_free_name") from None
                 try:
                     reason_inode = os.fstat(reason_fd).st_ino
                     try:
@@ -391,10 +416,44 @@ def list_failed(root_fd: int, folder: RelPath) -> set[str]:
         return set()
 
 
+def claim_folder(root_fd: int, folder: RelPath, owner: str) -> bool:
+    """Whether `folder` belongs to `owner` (a workspace id): the first workspace that reads
+    a folder writes `.brievie-werkruimte` in it (O_EXCL), and a folder another workspace
+    claimed is never read, also after that workspace renamed or left it. Removing the file
+    by hand gives the folder free. A link or anything odd in its place: not ours."""
+    _check(folder)
+    expected = (owner + "\n").encode("utf-8")
+    with _folder(root_fd, folder) as fd:
+        try:
+            made = os.open(_CLAIM_NAME, _NEW_FILE_FLAGS, _REASON_MODE, dir_fd=fd)
+        except FileExistsError:
+            made = None
+        except OSError:
+            return False
+        if made is not None:
+            try:
+                os.write(made, expected)
+            finally:
+                os.close(made)
+            return True
+        try:
+            existing = os.open(_CLAIM_NAME, _FILE_FLAGS, dir_fd=fd)
+        except OSError:
+            return False
+        try:
+            info = os.fstat(existing)
+            if not _regular(info) or info.st_size > _CLAIM_MAX:
+                return False
+            return os.read(existing, _CLAIM_MAX + 1) == expected
+        finally:
+            os.close(existing)
+
+
 def probe(root_fd: int, folder: RelPath) -> ProbeResult:
     """What the `intake` service can do in `folder`, for the Scanmap page: read it, and make
     and remove a probe file `.brievie-check` (O_EXCL; removed only when it is the one it
-    just made). The only function that writes or removes a dot name."""
+    just made). With `claim_folder` the only functions that write a dot name; only this one
+    removes one."""
     _check(folder)
     fds: list[int] = []
     try:

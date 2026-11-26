@@ -156,7 +156,10 @@ def test_a_crash_before_the_removal_makes_no_second_letter(
     two_rounds()
     assert source.exists()
     [first] = letters(world)
+    # A failed removal waits an hour before the next try.
     scan_round(now=at(2 * LATER))
+    assert source.exists()
+    scan_round(now=at(2 * LATER + 3600))
     assert [d.id for d in letters(world)] == [first.id]
     assert not source.exists()
 
@@ -398,3 +401,48 @@ def test_no_file_or_folder_name_reaches_the_log(
         two_rounds()
     assert "geheim" not in caplog.text
     assert "Medewerker" not in caplog.text
+
+
+def test_a_folder_another_workspace_claimed_is_not_read(share: Path) -> None:
+    world = make_world(per_person=False)
+    source = put(share, "kantoor", "brief.jpg")
+    (share / "kantoor" / ".brievie-werkruimte").write_text("een-andere-werkruimte\n")
+    two_rounds()
+    assert letters(world) == []
+    assert source.exists()
+    assert settings_row(world).check_state == "taken"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every file")
+def test_a_file_brievie_may_not_read_goes_to_mislukt_and_holds_nothing_up(
+    share: Path,
+) -> None:
+    world = make_world(per_person=False)
+    closed = put(share, "kantoor", "a-dicht.jpg")
+    put(share, "kantoor", "b-open.jpg")
+    closed.chmod(0o000)
+    two_rounds()
+    assert len(letters(world)) == 1
+    assert (share / "kantoor" / "mislukt" / "a-dicht.jpg").exists()
+
+
+def test_a_purged_letter_whose_source_stayed_holds_nothing_up(
+    share: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = make_world(per_person=False)
+    kept = put(share, "kantoor", "brief.jpg")
+    monkeypatch.setattr(scan_files, "remove_imported", _refuse)
+    two_rounds()
+    [document] = letters(world)
+    with workspace_context(world.workspace.id, actor=SYSTEM):
+        ScanFile.objects.update(document=None)
+        Document.objects.filter(id=document.id).delete()
+    put(share, "kantoor", "tweede.jpg")
+    scan_round(now=at(2 * LATER + 3600))
+    scan_round(now=at(3 * LATER + 3600))
+    assert len(letters(world)) == 1
+    assert kept.exists()
+
+
+def _refuse(root_fd: int, imported: scan_files.ImportedFile) -> None:
+    raise scan_files.ScanRefusedError("changed")

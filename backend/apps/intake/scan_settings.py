@@ -8,7 +8,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Min, Q
+from django.db.models import Count, Min
 from django.db.models.functions import Lower
 
 from apps.audit.codes import AuditCode, TargetKind
@@ -169,7 +169,9 @@ def add_scan_folder(*, workspace_id: UUID, person_id: UUID, name: str, actor: Au
         else:
             taken = {row.person_id or row.id: row.name for row in others}
             wanted = person_folder_names({person.id: person.display_name}, taken=taken)[person.id]
-        if others.filter(Q(name__iexact=wanted)).exists():
+        # The job matches folders with casefold() (SMB ignores case; "Straße" is "STRASSE").
+        folded = wanted.casefold()
+        if any(name.casefold() == folded for name in others.values_list("name", flat=True)):
             raise ScanFolderError("subfolder_taken")
         if folder is None:
             folder = ScanFolder(workspace_id=workspace_id, person=person)

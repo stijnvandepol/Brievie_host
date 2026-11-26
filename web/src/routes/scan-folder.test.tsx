@@ -159,6 +159,12 @@ describe("Scanmap", () => {
     expect(screen.getByText(/1026/)).toBeVisible();
   });
 
+  it("says when the folder belongs to another workspace", async () => {
+    scanServer({ ...on, check: "taken" });
+    renderApp(path);
+    expect(await screen.findByText(/hoort bij een andere werkruimte/)).toBeVisible();
+  });
+
   it("says when it works", async () => {
     scanServer(on);
     renderApp(path);

@@ -55,6 +55,9 @@ logger = logging.getLogger(__name__)
 ROUND_LIMIT = 20
 PURGE_AFTER = timedelta(days=30)
 UNKNOWN_FOLDERS_MAX = 50
+# The reason of an imported row whose source could not be removed, and when to try again.
+REMOVE_FAILED = "remove_failed"
+REMOVE_RETRY = timedelta(hours=1)
 
 # The sentence in `<name>.reden.txt` beside a file in mislukt/, per refusal code.
 REASON_TEXTS: Mapping[str, Promise] = {
@@ -119,10 +122,11 @@ def scan_round(*, now: Callable[[], datetime] = timezone.now) -> None:
         for workspace_id in Workspace.objects.values_list("id", flat=True):
             try:
                 scan_workspace(workspace_id, root_fd, now=now())
-            except (DatabaseError, OSError, ScanRefusedError) as error:
+                _purge(workspace_id, now())
+            except Exception as error:  # noqa: BLE001 - one workspace never stops the others
+                # The type or code only: a message may quote a file's name.
                 code = error.code if isinstance(error, ScanRefusedError) else type(error).__name__
                 logger.warning("Scan folder round stopped for %s: %s", workspace_id, code)
-            _purge(workspace_id, now())
     finally:
         os.close(root_fd)
 
@@ -149,6 +153,14 @@ def scan_workspace(
     if checked.state in ("missing", "not_readable"):
         _store_probe(workspace_id, checked, now=now)
         return
+    if not scan_files.claim_folder(root_fd, top, str(workspace_id)):
+        # Another workspace read this folder before (and may have left letters in it).
+        _store_probe(
+            workspace_id,
+            scan_files.ProbeResult("taken", checked.owner_uid, checked.owner_gid),
+            now=now,
+        )
+        return
     for folder in config.folders.values():
         if folder.state == ScanFolder.State.ACTIVE:
             try:
@@ -159,10 +171,16 @@ def scan_workspace(
     sightings, unknown = _look(root_fd, config)
     failed_names = scan_files.list_failed(root_fd, top)
     ready, removable = _record(workspace_id, config, sightings, unknown, failed_names, now=now)
-    for row_id, imported in removable:
+    for row_id, imported in removable[:limit]:
         _verify_and_remove(workspace_id, root_fd, row_id, imported, data=None)
-    for sighting in ready[:limit]:
-        _take(workspace_id, root_fd, sighting)
+    # Only what was taken in or moved counts; a file that could do neither (no rights to
+    # move it) is tried again next round but never holds up the files behind it.
+    done = 0
+    for sighting in ready[: limit * 3]:
+        if done >= limit:
+            break
+        if _take(workspace_id, root_fd, sighting):
+            done += 1
 
 
 def _store_probe(workspace_id: UUID, checked: scan_files.ProbeResult, *, now: datetime) -> None:
@@ -324,7 +342,11 @@ def _record(
                 and row.removed_at is None
                 and previous == current
             ):
-                removable.append((row.id, ImportedFile.from_row(row)))
+                # A letter purged since keeps its source where it is (never imported
+                # again); a removal that failed is tried again after an hour.
+                retry = row.reason != REMOVE_FAILED or row.updated_at < now - REMOVE_RETRY
+                if row.document_id is not None and retry:
+                    removable.append((row.id, ImportedFile.from_row(row)))
                 continue
             if row.state != ScanFile.State.SEEN:
                 # Another file under an old row's path and inode: a new sighting.
@@ -344,7 +366,15 @@ def _record(
             if take and sighting.state != ScanFolder.State.PAUSED:
                 ready.append((since, sighting))
         for key, row in rows.items():
-            if row.state == ScanFile.State.SEEN and key not in seen_keys:
+            if (
+                row.state == ScanFile.State.IMPORTED
+                and row.removed_at is None
+                and key not in seen_keys
+            ):
+                # Removed by hand (or the removal went through before a crash).
+                row.removed_at = now
+                row.save(update_fields=["removed_at", "updated_at"])
+            elif row.state == ScanFile.State.SEEN and key not in seen_keys:
                 # Taken away by a person, or no longer read: forget it.
                 row.delete()
             elif (
@@ -357,11 +387,11 @@ def _record(
     return [sighting for _since, sighting in ready], removable
 
 
-def _take(workspace_id: UUID, root_fd: int, sighting: _Sighting) -> None:
-    """Read, check and import one stable file; move it to mislukt/ when it is refused."""
+def _take(workspace_id: UUID, root_fd: int, sighting: _Sighting) -> bool:
+    """Read, check and import one stable file; move it to mislukt/ when it is refused.
+    True when the file was taken in or moved."""
     if sighting.state == ScanFolder.State.GONE:
-        _fail(workspace_id, root_fd, sighting, "person_gone")
-        return
+        return _fail(workspace_id, root_fd, sighting, "person_gone")
     try:
         data = scan_files.read_candidate(
             root_fd,
@@ -371,27 +401,28 @@ def _take(workspace_id: UUID, root_fd: int, sighting: _Sighting) -> None:
         )
     except ScanRefusedError as refusal:
         if refusal.code == "too_large":
-            _fail(workspace_id, root_fd, sighting, "file_too_large")
-        return
+            return _fail(workspace_id, root_fd, sighting, "file_too_large")
+        if refusal.code in ("not_a_file", "linked"):
+            # No right to read it, or a second name of another file: not the job's to open.
+            return _fail(workspace_id, root_fd, sighting, "unreadable")
+        return False
     try:
         checked = check_file(
             data, max_bytes=settings.BRIEVIE_MAX_UPLOAD_BYTES, max_pages=settings.BRIEVIE_MAX_PAGES
         )
         row_id, imported = _import(workspace_id, sighting, data, checked)
     except FileRefusedError as refusal:
-        _fail(workspace_id, root_fd, sighting, refusal.code)
-        return
+        return _fail(workspace_id, root_fd, sighting, refusal.code)
     except PersonGoneError:
-        _fail(workspace_id, root_fd, sighting, "person_gone")
-        return
+        return _fail(workspace_id, root_fd, sighting, "person_gone")
     except PermanentError:
-        _fail(workspace_id, root_fd, sighting, "unreadable")
-        return
+        return _fail(workspace_id, root_fd, sighting, "unreadable")
     except (ApiError, DatabaseError, OSError) as error:
         # A full disk or a database that went away is not the file's fault: next round.
         logger.warning("Scan folder import postponed: %s", type(error).__name__)
-        return
+        return False
     _verify_and_remove(workspace_id, root_fd, row_id, imported, data=data)
+    return True
 
 
 def _import(
@@ -468,14 +499,15 @@ def _verify_and_remove(
         return
     try:
         scan_files.remove_imported(root_fd, imported)
-    except ScanRefusedError as refusal:
-        logger.warning("Scan folder letter %s: source not removed: %s", document_id, refusal.code)
-        return
-    except OSError as error:
-        # No right to remove on the share: the Scanmap page's check shows it.
-        logger.warning(
-            "Scan folder letter %s: source not removed: %s", document_id, type(error).__name__
-        )
+    except (ScanRefusedError, OSError) as error:
+        # No right to remove on the share (the Scanmap page's check shows it), or the file
+        # changed: tried again in an hour, not every minute.
+        code = error.code if isinstance(error, ScanRefusedError) else type(error).__name__
+        logger.warning("Scan folder letter %s: source not removed: %s", document_id, code)
+        with workspace_context(workspace_id, actor=SYSTEM):
+            ScanFile.objects.filter(id=row_id).update(
+                reason=REMOVE_FAILED, updated_at=timezone.now()
+            )
         return
     with workspace_context(workspace_id, actor=SYSTEM):
         ScanFile.objects.filter(id=row_id).update(
@@ -483,14 +515,17 @@ def _verify_and_remove(
         )
 
 
-def _fail(workspace_id: UUID, root_fd: int, sighting: _Sighting, code: str) -> None:
+def _fail(workspace_id: UUID, root_fd: int, sighting: _Sighting, code: str) -> bool:
     """Move the file to mislukt/ with the reason, and record it at its new place."""
     reason = REASON_TEXTS.get(code, REASON_TEXTS["unreadable"])
     try:
         moved = scan_files.move_to_failed(root_fd, sighting.path, reason_text=str(reason))
     except ScanRefusedError as refusal:
         logger.warning("Scan folder file not moved: %s", refusal.code)
-        return
+        return False
+    except OSError as error:
+        logger.warning("Scan folder file not moved: %s", type(error).__name__)
+        return False
     current = sighting.fingerprint
     with workspace_context(workspace_id, actor=SYSTEM):
         ScanFile.objects.filter(
@@ -512,3 +547,4 @@ def _fail(workspace_id: UUID, root_fd: int, sighting: _Sighting, code: str) -> N
             },
         )
     logger.info("Scan folder file refused: %s", code)
+    return True

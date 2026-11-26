@@ -3707,11 +3707,29 @@ dependency (only the standard library's `os` on top of phase 1).
   pages), file `routes/scan-folder.tsx`, linked from Instellingen for admins when the server
   has a scan folder.
 - **Files Brievie writes on the share** (the reason file, the placeholder of a move, the
-  probe) are not group-writable (0640 / 0600): removing them needs rights on the folder only.
+  probe, the claim) are 0600 (CodeQL): removing them needs rights on the folder only. On a
+  plain Linux share the office cannot open a `.reden.txt` then; on a Synology the folder's
+  inherited ACL decides. The Scanmap page lists every reason, so nothing is lost.
 - **Proof in a container:** CI job `scan-folder-proof` runs the wrapper stack with a share
   owned by uid 20000 and group 100, a link to a file and a link to a folder outside it; a
   dropped PDF becomes a letter and leaves the share, nothing outside changes and both links
   stay.
+
+### Final review of the branch (fresh reviewer, before the PR left draft)
+
+Fixed, each with a test: a workspace folder is claimed with `.brievie-werkruimte` (the
+workspace id, O_EXCL), so a name freed by a rename or a deleted workspace never lets another
+workspace read the files left there (check `taken`); a long file name no longer blocks a
+workspace (the name in `mislukt/` is cut to fit 255 bytes with its reason file, and an
+error there is a refusal, not a crash); a name that is not UTF-8 is skipped and any error
+stops one workspace's round only; a file the service may not read (mode 000, a hard link)
+goes to `mislukt/` as `unreadable` and only taken or moved files count against the 20 per
+round; an imported source whose letter was purged is left alone; a removal that fails is
+tried again after an hour, not every minute; an imported row whose file is gone gets
+`removed_at` (and is purged after 30 days); folder names are compared with `casefold()` in
+the service as in the job. Left (minor): the check-then-unlink window of `remove_imported`
+(a file swapped under the same name in that instant is removed; a rename-aside would close
+it), rows under a previous folder name are not purged.
 
 ### Left for later
 

@@ -78,6 +78,10 @@ function Check({ status }: { status: ScanFolder }) {
           <p className="muted">{t`De map is van gebruiker ${uid} en groep ${gid}.`}</p>
         </MessageBar>
       );
+    case "taken":
+      return (
+        <MessageBar intent="error">{t`Deze map hoort bij een andere werkruimte op deze server. Kies een andere naam, of haal het bestand .brievie-werkruimte uit de map als die werkruimte hem niet meer gebruikt.`}</MessageBar>
+      );
     case "missing":
       return (
         <MessageBar intent="warning">{t`Brievie vindt de map nog niet en kan hem ook niet maken. Controleer de rechten op de scanmap van de server.`}</MessageBar>

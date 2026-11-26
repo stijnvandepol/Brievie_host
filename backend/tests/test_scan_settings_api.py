@@ -199,6 +199,17 @@ def test_a_name_a_department_has_is_taken(admin: Client, ws_b: Workspace) -> Non
     assert response.json()["code"] == "scan_subfolder_taken"
 
 
+def test_names_that_fold_to_the_same_are_taken(admin: Client, ws_b: Workspace) -> None:
+    put(admin, ws_b, {"enabled": True, "per_person": True})
+    first = _person(ws_b, "Straatkant")
+    second = _person(ws_b, "Tweede")
+    url = f"/workspaces/{ws_b.id}/scan-folder/folders"
+    assert post_json(admin, url, {"person_id": str(first.id), "name": "Straße"}).status_code == 200
+    response = post_json(admin, url, {"person_id": str(second.id), "name": "STRASSE"})
+    assert response.status_code == 409
+    assert response.json()["code"] == "scan_subfolder_taken"
+
+
 def test_a_department_while_departments_are_off(admin: Client, ws_b: Workspace) -> None:
     set_state(ws_b, e=True, d=False, a=True)
     department = _person(ws_b, "Financien", kind=Person.Kind.DEPARTMENT)

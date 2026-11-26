@@ -361,6 +361,11 @@ read goes to `mislukt/` in the workspace folder, with `<name>.reden.txt` beside 
 says why; Brievie never moves or removes anything in `mislukt/`: put a file back to try
 again, or remove it yourself. At most 20 files per workspace per minute.
 
+The first workspace that reads a folder writes `.brievie-werkruimte` in it; a folder that
+another workspace claimed is never read (the page says so), also after that workspace chose
+another name, so its old letters never land elsewhere. Remove that file by hand to give the
+folder to another workspace.
+
 **Folders per person and department** ("Mappen per persoon en afdeling", off by default):
 Brievie makes a folder for every person with an account and for every department while
 departments are on. A letter in such a folder gets that person or department as its
