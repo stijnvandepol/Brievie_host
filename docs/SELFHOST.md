@@ -321,6 +321,63 @@ seconds to read, up to a minute at most; one file gets at most 10 minutes in all
 upload takes roughly twice the space of a scan; an upload is refused while less than 1 GB
 would stay free on the documents' disk (`BRIEVIE_UPLOAD_FREE_RESERVE_BYTES`).
 
+## 11b. The scan folder ("Scanmap")
+
+An office scanner can put its PDFs in a folder on the NAS; Brievie takes each file in and
+removes it from the folder. Off by default. Only the `intake` service sees the folder: it
+checks every file, keeps it sealed like an upload and hands it to the worker. Its network
+reaches PostgreSQL only, never the internet; its disk is read-only; it has no capabilities.
+
+1. Pick one folder for the whole server, for example `/volume1/scans/brievie`. All
+   workspaces that use the scan folder get a folder inside it, so everyone with rights on
+   it can put a letter in every workspace: **one folder means one level of trust**. Use a
+   separate server, or do not use the scan folder, for workspaces that must stay apart.
+2. Give the group `users` (gid 100) read and write on that folder, deleting included. The
+   `intake` service runs as uid 10001 with that group added (`BRIEVIE_SCAN_GID` when you
+   used another group).
+   - **Synology, without SSH:** DSM → Configuratiescherm → Gedeelde map: make a shared folder
+     (e.g. `scans`) and a folder `brievie` in it. Make a DSM user `scanner` with read/write on
+     `scans` only. File Station → `brievie` → Eigenschappen → Machtiging: the group `users`
+     read and write, including "Verwijderen" for subfolders and files. In Container Manager →
+     Project → Brievie: put `BRIEVIE_SCAN_DIR=/volume1/scans/brievie` in the `.env` and build
+     the project again.
+   - **Linux:** `sudo chgrp users /srv/scans/brievie && sudo chmod g+rwxs /srv/scans/brievie`
+     (the `s` makes new files keep the group).
+3. Set `BRIEVIE_SCAN_DIR` in `deploy/.env` (or in the compose-only file's environment) and
+   start Brievie again (`./brievie start`, or `docker compose up -d`).
+4. In Brievie, as a workspace admin: **Instellingen → Scanmap**, switch it on and keep or
+   change the folder name (lower case, digits and `-`, unique on the server). The page shows
+   what the `intake` service sees: "De scanmap werkt.", or which owner and group the folder
+   has when it cannot read or write it.
+5. In the scanner: "scan naar map" over SMB to `\\<nas>\scans\brievie\<folder name>`, as
+   the user `scanner`, **one file per letter**, PDF.
+
+What happens to a file: it is taken once its size and time did not change for a minute;
+it becomes a letter on nobody's name (as an upload, but nobody "scanned" it); Brievie reads
+the sealed copy back and only then removes the file from the share. A removed file is **not**
+in Synology's `#recycle`: the recycle bin only covers deletions through SMB, AFP or File
+Station. The letter is in Brievie, with its original downloadable. A file Brievie cannot
+read goes to `mislukt/` in the workspace folder, with `<name>.reden.txt` beside it that
+says why; Brievie never moves or removes anything in `mislukt/`: put a file back to try
+again, or remove it yourself. At most 20 files per workspace per minute.
+
+**Folders per person and department** ("Mappen per persoon en afdeling", off by default):
+Brievie makes a folder for every person with an account and for every department while
+departments are on. A letter in such a folder gets that person or department as its
+addressee directly (automatic, undoable in its history); who else sees it follows the
+workspace's "Wie ziet wat". A person without an account gets a folder only when an admin
+makes one on the page. A folder Brievie does not know (made by hand with another name) is
+never read and nothing in it is moved: the page lists it with its number of files and lets
+an admin link it to a person or department. Brievie never renames or removes a folder.
+
+**SMB1:** many older scanners only speak SMB1. Do not switch SMB1 on in DSM (it is
+insecure); such a scanner can often send by FTP(S) to DSM instead, into the same folder.
+
+**Not verified yet:** that a DSM ACL granting `users` read and write is honoured for the
+container (supplementary gid 100), and that files the scanner makes can be removed by that
+group. When the page says it cannot read or write, note the owner and group it shows and
+the Machtiging screen; the fix is the folder's rights or `BRIEVIE_SCAN_GID`.
+
 ## 12. Not verified yet
 
 Tested on GitHub's Linux runners and on a Mac with Docker Desktop: a restore on an

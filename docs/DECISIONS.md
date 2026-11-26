@@ -3640,3 +3640,83 @@ that is not either.
 - **Observation, not changed:** `list_archive_kind_type` (90-200 ms) walks the workspace the
   same way; `kind` and `document_type` are leakproof, so an index on them would help it
   when it nears the gate.
+
+## 2026-11-26: Intake phase 2, the scan folder
+
+Spec `docs/superpowers/specs/2026-11-20-inname-zonder-iphone-design.md` S 3, plan
+`docs/superpowers/plans/2026-11-20-host-inname-zonder-iphone.md` Tasks 9-15. No new
+dependency (only the standard library's `os` on top of phase 1).
+
+### The owner's decisions (binding)
+
+- A letter from someone's folder goes straight to that person or department (preset
+  addressee, `automatic`, history origin `watch_folder`, no actor, undoable), not as a
+  proposal. No per-folder "privé" switch in v1.
+- A folder that maps to nobody is never read and nothing in it is moved or removed; the
+  Scanmap page lists it with its number of files. Brievie never makes a person from a name.
+- Every person with an account and every department (while departments are on) gets a
+  folder; others only when an admin makes one ("Map maken"), also inactive ones.
+- Naming: `scan` everywhere in code (`BRIEVIE_SCAN_DIR`, `ScanFolderSettings`,
+  `getScanFolder`); "inbox" is Te doen/Inbox.
+
+### Rulings of the spec, as built
+
+- **Remove after a verified import, no `verwerkt/` folder.** The file is removed only after
+  the letter's transaction committed and the sealed original read back to the same SHA-256;
+  a crash in between makes the next round remove it (the row is already `imported`, the
+  client id `uuid5(workspace, path, sha256, mtime)` would answer the same letter).
+- **A separate `intake` service** (same image, queue `intake`), the only one that mounts the
+  share, so a stuck SMB mount cannot stall the pipeline and the worker never sees the share.
+- `mislukt/` is never moved or removed by Brievie; a file put back is tried again (its old
+  row moved with it to its `mislukt/` path).
+
+### Rulings made while building
+
+- **The `intake` service is locked down beyond the plan:** read-only root filesystem with a
+  64 MB tmpfs on `/tmp` (the PDF check's answer file), `cap_drop: [ALL]`,
+  `no-new-privileges`, and a network that reaches PostgreSQL only: the compose-only file's
+  internal `db` network, and in the wrapper's file a new internal network `scan` that only
+  `intake` and `postgres` join. A parser taken over by a crafted file cannot reach the
+  internet. It keeps uid 10001 (it writes the `documents` volume, owned by 10001) and gets
+  the share's group with `group_add` (`BRIEVIE_SCAN_GID`, default 100).
+- **`COMPOSE_REVISION` stays 1.** The service is optional (off unless `BRIEVIE_SCAN_DIR` is
+  set); raising the revision would refuse every 0.5.0 compose file on the new image. A
+  compose user who keeps the old file has no `intake` service and the page says the server
+  has no scan folder. Owner to confirm.
+- **Every stop list includes `intake`:** `./brievie`'s `compose_stop` (restore and update),
+  the update's start, `restore_install`'s `docker compose stop api worker intake keeper
+  caddy` (it writes the database and the documents volume).
+- **`intake_scanfile` follows its letter:** it has a key to `documents_document`, so it gets
+  the restrictive visibility policies of every child table (a row without a letter stays
+  visible); the job runs as the system, an admin's status page sees what they may.
+- **The file is checked before the transaction** (`create_document_from_file(...,
+  checked=...)`), so no transaction waits for the PDF check; the preset person is read
+  again inside the letter's transaction (`PersonGoneError` → `mislukt/` with
+  `person_gone`).
+- **Paused folders are recorded but never read:** a department's files while departments
+  are off get `seen` rows (size and time only) so the page can count them; they are taken
+  as soon as departments are on again.
+- **Logs hold codes, counts and document ids only;** the file's path is stored exactly in
+  `ScanFile.relative_path` (to find it again) and shown nowhere; names on the page are
+  BSN-masked. Audit rows: `workspace_setting_changed` with `scan_folder`,
+  `scan_folder_per_person` (true/false) and `scan_folder_person` (added/removed); no name.
+- **Endpoints** `getScanFolder`, `updateScanFolder`, `addScanFolder`, `removeScanFolder`:
+  web session only, admins, closed on the public route. `suggested_name` (from the
+  workspace's name) was added so the page can offer a name before one is stored.
+- **The web page lives at `/w/<id>/instellingen/scanmap`** (Dutch like the other settings
+  pages), file `routes/scan-folder.tsx`, linked from Instellingen for admins when the server
+  has a scan folder.
+- **Files Brievie writes on the share** (the reason file, the placeholder of a move, the
+  probe) are not group-writable (0640 / 0600): removing them needs rights on the folder only.
+- **Proof in a container:** CI job `scan-folder-proof` runs the wrapper stack with a share
+  owned by uid 20000 and group 100, a link to a file and a link to a folder outside it; a
+  dropped PDF becomes a letter and leaves the share, nothing outside changes and both links
+  stay.
+
+### Left for later
+
+- A real Synology: whether a DSM ACL for `users` is honoured for gid 100 in a container,
+  and whether the scanner's files can be removed by that group (SELFHOST 11b).
+- "Post in deze map is privé" and a proposal mode per folder (spec S 3.2a), if asked.
+- The pipeline's own parser isolation (its own uid or container) is still the follow-up of
+  the PR #58 review; the `intake` service now checks scan-folder files without internet.
