@@ -4,12 +4,13 @@
 # Caddy is the only door to the api and the only judge of the way a request came
 # ("Van buiten bereikbaar", docs/SELFHOST.md). It tells the api in headers it always
 # writes itself, overwriting whatever a client sent (snippet to_api):
-#   X-Brievie-Route      private (home network, VPN) or public (tunnel, own reverse proxy)
+#   X-Brievie-Route      private (home network, VPN) or public (your own tunnel or reverse proxy)
 #   X-Brievie-Client-IP  the client's address after Caddy's own trusted-proxy rules
 #   X-Brievie-Peer-IP    the direct peer (the settings page shows it)
-#   X-Brievie-Via        which way exactly: home, public_name, proxy, cloudflare, tunnel
-# The api never reads CF-Connecting-IP; Caddy reads it only on the tunnel listener :8080,
-# which is published nowhere.
+#   X-Brievie-Via        which way exactly: home, public_name, proxy, cloudflare, unknown_proxy
+# Brievie runs no tunnel: your own cloudflared, Tailscale or reverse proxy forwards to the
+# https port below. Nobody reads CF-Connecting-IP; the client address is X-Forwarded-For,
+# believed only from BRIEVIE_TRUSTED_PROXIES.
 {
 	# The root is distributed by pinning, not by installing it into a trust store.
 	skip_install_trust
@@ -22,12 +23,6 @@
 	servers :443 {
 		trusted_proxies static {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
 		trusted_proxies_strict
-	}
-	# The tunnel listener: never published, so only containers of this compose network
-	# (cloudflared) reach it. The client address is Cloudflare's CF-Connecting-IP.
-	servers :8080 {
-		trusted_proxies static private_ranges
-		client_ip_headers CF-Connecting-IP
 	}
 }
 
@@ -57,21 +52,21 @@
 
 # The one way to the api. {args[0]} is the Host the api gets: the request's own (with its
 # port: a home install on BRIEVIE_HTTPS_PORT=8443 must keep Host equal to the browser's
-# Origin for the CSRF check) on :443, the public name on the tunnel listener.
+# Origin for the CSRF check).
 (to_api) {
 	reverse_proxy api:8000 {
 		header_up X-Brievie-Route {vars.brievie_route}
 		header_up X-Brievie-Client-IP {client_ip}
 		header_up X-Brievie-Peer-IP {remote_host}
-		# Which way exactly (home, public_name, proxy, cloudflare, tunnel): the settings
+		# Which way exactly (home, public_name, proxy, cloudflare, unknown_proxy): the settings
 		# page shows what it has seen.
 		header_up X-Brievie-Via {vars.brievie_via}
 		header_up Host {args[0]}
 	}
 }
 
-# Everything a request meets after its route is known; imported by both listeners, so
-# each limit and each error answer exists once.
+# Everything a request meets after its route is known: each limit and each error answer
+# exists once.
 (brievie_routes) {
 	import security_headers
 
@@ -121,7 +116,7 @@
 
 	# The route, fail-closed and by name first (security review of PR #53): a request for
 	# the public name is always public, whatever its source, and so is one that carries
-	# Cloudflare's headers (a tunnel pointed at this port by mistake). Only the rest is
+	# Cloudflare's headers (your own cloudflared forwards here). Only the rest is
 	# private. The source address decides whose client address is believed
 	# (trusted_proxies above) and the HSTS of a request from your own proxy. Every vars
 	# has a matcher; Caddy keeps their order for vars, so a later match wins.
@@ -154,7 +149,7 @@
 		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
 		header Via *
 	}
-	@public_name host {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}
+	@public_name host {$BRIEVIE_PUBLIC_HOST_MATCH:public-hostname-not-set.invalid}
 	@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
 	@cf_ray header Cf-Ray *
 	@cf_client header Cf-Connecting-Ip *
@@ -209,23 +204,4 @@
 	}
 
 	import brievie_routes {http.request.hostport}
-}
-
-# The tunnel: cloudflared forwards here over the compose network (in the Cloudflare
-# dashboard the service is http://caddy:8080). Never published in a ports: list.
-# BRIEVIE_TUNNEL_HOST is BRIEVIE_PUBLIC_HOSTNAME, or a name that resolves nowhere while
-# that is not set (the api then refuses the Host: closed, not open).
-http://:8080 {
-	vars {
-		brievie_route public
-		brievie_via tunnel
-		brievie_hsts 31536000
-	}
-	# Cloudflare got the request over plain http: send the browser to https first.
-	@plain header X-Forwarded-Proto http
-	redir @plain https://{$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}{uri} 308
-	# Cloudflare ended TLS; for the api this request is https (secure cookies, CSRF).
-	request_header X-Forwarded-Proto https
-
-	import brievie_routes {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}
 }

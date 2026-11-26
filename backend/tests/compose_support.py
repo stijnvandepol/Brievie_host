@@ -61,23 +61,6 @@ POSTGRES_PASSWORDS = frozenset(
 )
 
 
-# What must be equal in both definitions of the optional `cloudflared` service.
-TUNNEL_KEYS = (
-    "image",
-    "profiles",
-    "command",
-    "environment",
-    "volumes",
-    "read_only",
-    "cap_drop",
-    "security_opt",
-    "depends_on",
-    "ports",
-    "restart",
-    "networks",
-)
-
-
 def _services(config: Config) -> dict[str, dict[str, object]]:
     raw = config.get("services", {})
     assert isinstance(raw, dict)
@@ -144,10 +127,4 @@ def drift(wrapper: Config, compose: Config) -> list[str]:
         problems.append("api: the healthcheck differs")
     if "caddy" in new and old["caddy"].get("environment") != new["caddy"].get("environment"):
         problems.append("caddy: the environment differs")
-    # The optional tunnel is the same service in both files, apart from its log rotation
-    # and network (the wrapper has one network, the compose-only file two).
-    if "cloudflared" in old and "cloudflared" in new:
-        for key in TUNNEL_KEYS:
-            if old["cloudflared"].get(key) != new["cloudflared"].get(key):
-                problems.append(f"cloudflared: {key} differs")
     return problems
