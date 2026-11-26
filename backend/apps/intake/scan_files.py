@@ -1,0 +1,449 @@
+"""The only code that touches the scan folder's share (intake spec S 3.5, erase code).
+
+Every function refuses on its own, in code, before it acts:
+
+- the root is `settings.BRIEVIE_SCAN_ROOT` resolved once, never `/`, never equal to,
+  inside or around the storage root, and only when `BRIEVIE_SCAN_DIR_SET`;
+- a path is a tuple of names relative to the root, never a joined string: each name
+  non-empty, not `.` or `..`, without `/` or NUL and not starting with `.`, at most two
+  below the workspace folder;
+- every directory is opened with `O_DIRECTORY | O_NOFOLLOW` relative to its parent's
+  descriptor and every file with `O_NOFOLLOW`: a link at any level is refused, never
+  followed; a file must be regular with one link;
+- a file is removed only when the database says it was imported and it is still exactly
+  the file that was imported; a refused file is moved within its workspace folder into
+  `mislukt/` without ever overwriting; nothing in `mislukt/` is moved or removed;
+- no directory is ever removed and nothing is recursive.
+
+Refusals raise `ScanRefusedError(code)`; callers log the code only, never a name.
+"""
+
+import os
+import stat
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from django.conf import settings
+
+from apps.intake.scan_rules import RESERVED, Fingerprint, RelPath, is_candidate_name
+
+if TYPE_CHECKING:
+    from apps.intake.models import ScanFile
+
+__all__ = [
+    "Fingerprint",
+    "ImportedFile",
+    "ProbeResult",
+    "RelPath",
+    "ScanRefusedError",
+    "count_candidates",
+    "ensure_folder",
+    "list_candidates",
+    "list_failed",
+    "list_subfolders",
+    "move_to_failed",
+    "open_root",
+    "probe",
+    "read_candidate",
+    "remove_imported",
+]
+
+# The workspace folder and at most two names below it.
+_MAX_DEPTH = 3
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+# O_NONBLOCK: opening a FIFO for reading must not wait for a writer.
+_FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOCTTY
+_NEW_FILE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+_FOLDER_MODE = 0o2770
+_FILE_MODE = 0o660
+_PROBE_NAME = ".brievie-check"
+_REASON_SUFFIX = ".reden.txt"
+_MAX_NUMBER = 1000
+
+
+class ScanRefusedError(Exception):
+    """`code`: root_unset, root_missing, root_is_slash, root_overlaps_storage, bad_path,
+    not_a_folder, not_a_file, linked, changed, too_large, not_imported,
+    failed_untouchable or no_free_name."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class ImportedFile:
+    """A file the database recorded as imported: the only kind `remove_imported` takes."""
+
+    path: RelPath
+    fingerprint: Fingerprint
+
+    @classmethod
+    def from_row(cls, row: "ScanFile") -> "ImportedFile":
+        if row.state != "imported" or row.document_id is None:
+            raise ScanRefusedError("not_imported")
+        return cls(
+            path=tuple(row.relative_path.split("/")),
+            fingerprint=Fingerprint(
+                device=row.device, inode=row.inode, size=row.size, mtime_ns=row.mtime_ns
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    """ok, missing, not_readable or not_writable, and the folder's owner."""
+
+    state: str
+    owner_uid: int
+    owner_gid: int
+
+
+def _valid_name(name: str) -> bool:
+    return bool(name) and name not in (".", "..") and "/" not in name and "\x00" not in name
+
+
+def _check(path: RelPath) -> None:
+    if not 1 <= len(path) <= _MAX_DEPTH:
+        raise ScanRefusedError("bad_path")
+    for name in path:
+        if not isinstance(name, str) or not _valid_name(name) or name.startswith("."):
+            raise ScanRefusedError("bad_path")
+
+
+def _in_failed(path: RelPath) -> bool:
+    return any(name.casefold() == RESERVED for name in path[1:])
+
+
+def _overlaps(root: str, storage: str) -> bool:
+    return (
+        root == storage
+        or root.startswith(storage.rstrip(os.sep) + os.sep)
+        or storage.startswith(root.rstrip(os.sep) + os.sep)
+    )
+
+
+def open_root() -> int:
+    """A descriptor of the scan root; the caller closes it."""
+    if not settings.BRIEVIE_SCAN_DIR_SET:
+        raise ScanRefusedError("root_unset")
+    root = os.path.realpath(settings.BRIEVIE_SCAN_ROOT)
+    if root == os.sep:
+        raise ScanRefusedError("root_is_slash")
+    if not os.path.isdir(root):
+        raise ScanRefusedError("root_missing")
+    if _overlaps(root, os.path.realpath(settings.BRIEVIE_STORAGE_ROOT)):
+        raise ScanRefusedError("root_overlaps_storage")
+    try:
+        return os.open(root, _DIR_FLAGS)
+    except OSError:
+        raise ScanRefusedError("root_missing") from None
+
+
+def _open_dir(parent: int, name: str) -> int:
+    try:
+        return os.open(name, _DIR_FLAGS, dir_fd=parent)
+    except FileNotFoundError:
+        raise
+    except OSError:
+        # A link (ELOOP on Linux, ENOTDIR or EMLINK elsewhere), a file, or no rights.
+        raise ScanRefusedError("not_a_folder") from None
+
+
+@contextmanager
+def _folder(root_fd: int, folder: RelPath) -> Iterator[int]:
+    """A descriptor of `folder`, walked one name at a time without following links."""
+    fds: list[int] = []
+    try:
+        current = root_fd
+        for name in folder:
+            try:
+                current = _open_dir(current, name)
+            except FileNotFoundError:
+                raise ScanRefusedError("not_a_folder") from None
+            fds.append(current)
+        yield current
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
+
+
+def ensure_folder(root_fd: int, path: RelPath) -> None:
+    """Make each missing folder of `path`, one level at a time; an existing one is fine
+    (a link is refused). A folder Brievie makes is group-writable with the group bit set,
+    so the scanner's account can write in it and new files keep the share's group."""
+    _check(path)
+    fds: list[int] = []
+    try:
+        current = root_fd
+        for name in path:
+            created = False
+            try:
+                os.mkdir(name, _FOLDER_MODE, dir_fd=current)
+                created = True
+            except FileExistsError:
+                pass
+            except OSError:
+                raise ScanRefusedError("not_a_folder") from None
+            try:
+                current = _open_dir(current, name)
+            except FileNotFoundError:
+                raise ScanRefusedError("not_a_folder") from None
+            fds.append(current)
+            if created:
+                # The mode given to mkdir is narrowed by the umask.
+                os.fchmod(current, _FOLDER_MODE)
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
+
+
+def _fingerprint(info: os.stat_result) -> Fingerprint:
+    return Fingerprint(
+        device=info.st_dev, inode=info.st_ino, size=info.st_size, mtime_ns=info.st_mtime_ns
+    )
+
+
+def _entries(fd: int) -> list[tuple[str, os.stat_result]]:
+    """Names in the directory with their own `lstat` (a link is reported as a link)."""
+    found: list[tuple[str, os.stat_result]] = []
+    for name in sorted(os.listdir(fd)):
+        if not _valid_name(name) or name.startswith("."):
+            continue
+        try:
+            found.append((name, os.stat(name, dir_fd=fd, follow_symlinks=False)))
+        except OSError:
+            continue
+    return found
+
+
+def _regular(info: os.stat_result) -> bool:
+    return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+
+
+def list_candidates(root_fd: int, folder: RelPath) -> list[tuple[RelPath, Fingerprint]]:
+    """The files the job may read directly in `folder`: regular, one link, a PDF, JPEG
+    or PNG name. Links, other kinds and deeper folders are left out."""
+    _check(folder)
+    with _folder(root_fd, folder) as fd:
+        return [
+            ((*folder, name), _fingerprint(info))
+            for name, info in _entries(fd)
+            if _regular(info) and is_candidate_name(name)
+        ]
+
+
+def count_candidates(root_fd: int, folder: RelPath) -> int:
+    """How many files would be candidates in `folder` (for a folder that is not read)."""
+    try:
+        return len(list_candidates(root_fd, folder))
+    except ScanRefusedError:
+        return 0
+
+
+def list_subfolders(root_fd: int, folder: RelPath) -> list[str]:
+    """The directories directly in `folder` (no links), by name."""
+    _check(folder)
+    with _folder(root_fd, folder) as fd:
+        return [name for name, info in _entries(fd) if stat.S_ISDIR(info.st_mode)]
+
+
+def read_candidate(root_fd: int, path: RelPath, expected: Fingerprint, *, max_bytes: int) -> bytes:
+    """The bytes of the file, only when it is still the file the job looked at."""
+    _check(path)
+    if len(path) < 2:
+        raise ScanRefusedError("bad_path")
+    with _folder(root_fd, path[:-1]) as parent:
+        try:
+            fd = os.open(path[-1], _FILE_FLAGS, dir_fd=parent)
+        except FileNotFoundError:
+            raise ScanRefusedError("changed") from None
+        except OSError:
+            raise ScanRefusedError("not_a_file") from None
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise ScanRefusedError("not_a_file")
+            if info.st_nlink != 1:
+                raise ScanRefusedError("linked")
+            if _fingerprint(info) != expected:
+                raise ScanRefusedError("changed")
+            if info.st_size > max_bytes:
+                raise ScanRefusedError("too_large")
+            chunks: list[bytes] = []
+            left = info.st_size + 1
+            while left > 0:
+                chunk = os.read(fd, min(left, 1024 * 1024))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                left -= len(chunk)
+            data = b"".join(chunks)
+            if len(data) != info.st_size or _fingerprint(os.fstat(fd)) != expected:
+                raise ScanRefusedError("changed")
+            return data
+        finally:
+            os.close(fd)
+
+
+def remove_imported(root_fd: int, imported: ImportedFile) -> None:
+    """Remove the source of an imported letter: only while it is exactly the file that was
+    imported (device, inode, size, mtime), a regular file with one link."""
+    path = imported.path
+    _check(path)
+    if len(path) < 2:
+        raise ScanRefusedError("bad_path")
+    if _in_failed(path):
+        raise ScanRefusedError("failed_untouchable")
+    with _folder(root_fd, path[:-1]) as parent:
+        try:
+            info = os.stat(path[-1], dir_fd=parent, follow_symlinks=False)
+        except OSError:
+            raise ScanRefusedError("changed") from None
+        if not _regular(info) or _fingerprint(info) != imported.fingerprint:
+            raise ScanRefusedError("changed")
+        os.unlink(path[-1], dir_fd=parent)
+
+
+def _numbered(name: str, number: int) -> str:
+    if number == 1:
+        return name
+    stem, dot, extension = name.rpartition(".")
+    if not dot or not stem:
+        return f"{name} ({number})"
+    return f"{stem} ({number}).{extension}"
+
+
+def _remove_own(fd: int, name: str, inode: int) -> None:
+    """Remove a placeholder this module just made, and only that one."""
+    try:
+        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    except OSError:
+        return
+    if info.st_ino == inode and _regular(info):
+        os.unlink(name, dir_fd=fd)
+
+
+def move_to_failed(root_fd: int, path: RelPath, *, reason_text: str) -> RelPath:
+    """Move a refused file into `<workspace folder>/mislukt/` with `<name>.reden.txt`
+    beside it; a taken name gets " (2)", " (3)"... Nothing is ever overwritten: the target
+    name is reserved first with an empty file made with O_EXCL, which the rename then
+    replaces. Returns the new path."""
+    _check(path)
+    if len(path) < 2:
+        raise ScanRefusedError("bad_path")
+    if _in_failed(path):
+        raise ScanRefusedError("failed_untouchable")
+    target_folder: RelPath = (path[0], RESERVED)
+    with _folder(root_fd, path[:-1]) as source:
+        try:
+            info = os.stat(path[-1], dir_fd=source, follow_symlinks=False)
+        except FileNotFoundError:
+            raise ScanRefusedError("changed") from None
+        except OSError:
+            raise ScanRefusedError("not_a_file") from None
+        if not stat.S_ISREG(info.st_mode):
+            raise ScanRefusedError("not_a_file")
+        ensure_folder(root_fd, target_folder)
+        with _folder(root_fd, target_folder) as target:
+            for number in range(1, _MAX_NUMBER):
+                name = _numbered(path[-1], number)
+                reason = name + _REASON_SUFFIX
+                try:
+                    placeholder = os.open(name, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=target)
+                except FileExistsError:
+                    continue
+                placeholder_inode = os.fstat(placeholder).st_ino
+                os.close(placeholder)
+                try:
+                    reason_fd = os.open(reason, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=target)
+                except FileExistsError:
+                    _remove_own(target, name, placeholder_inode)
+                    continue
+                try:
+                    reason_inode = os.fstat(reason_fd).st_ino
+                    try:
+                        os.rename(path[-1], name, src_dir_fd=source, dst_dir_fd=target)
+                    except OSError:
+                        _remove_own(target, name, placeholder_inode)
+                        _remove_own(target, reason, reason_inode)
+                        raise ScanRefusedError("changed") from None
+                    os.write(reason_fd, (reason_text.strip() + "\n").encode("utf-8"))
+                finally:
+                    os.close(reason_fd)
+                return (*target_folder, name)
+    raise ScanRefusedError("no_free_name")
+
+
+def list_failed(root_fd: int, folder: RelPath) -> set[str]:
+    """The names in `<folder>/mislukt/` (read only)."""
+    _check(folder)
+    try:
+        with _folder(root_fd, (*folder, RESERVED)) as fd:
+            return {name for name, info in _entries(fd) if stat.S_ISREG(info.st_mode)}
+    except ScanRefusedError:
+        return set()
+
+
+def probe(root_fd: int, folder: RelPath) -> ProbeResult:
+    """What the `intake` service can do in `folder`, for the Scanmap page: read it, and make
+    and remove a probe file `.brievie-check` (O_EXCL; removed only when it is the one it
+    just made). The only function that writes or removes a dot name."""
+    _check(folder)
+    fds: list[int] = []
+    try:
+        current = root_fd
+        for name in folder:
+            try:
+                current = os.open(name, _DIR_FLAGS, dir_fd=current)
+            except FileNotFoundError:
+                return ProbeResult("missing", 0, 0)
+            except OSError:
+                return ProbeResult("not_readable", 0, 0)
+            fds.append(current)
+        return _probe_in(current)
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
+
+
+def _probe_in(fd: int) -> ProbeResult:
+    info = os.fstat(fd)
+    owner = (info.st_uid, info.st_gid)
+    try:
+        os.listdir(fd)
+    except OSError:
+        return ProbeResult("not_readable", *owner)
+    for attempt in range(2):
+        try:
+            check = os.open(_PROBE_NAME, _NEW_FILE_FLAGS, _FILE_MODE, dir_fd=fd)
+            break
+        except FileExistsError:
+            if attempt or not _remove_stale_probe(fd):
+                return ProbeResult("not_writable", *owner)
+        except OSError:
+            return ProbeResult("not_writable", *owner)
+    inode = os.fstat(check).st_ino
+    os.close(check)
+    try:
+        _remove_own(fd, _PROBE_NAME, inode)
+    except OSError:
+        return ProbeResult("not_writable", *owner)
+    return ProbeResult("ok", *owner)
+
+
+def _remove_stale_probe(fd: int) -> bool:
+    """A probe file left by a probe that was cut off: empty, regular and ours."""
+    try:
+        info = os.stat(_PROBE_NAME, dir_fd=fd, follow_symlinks=False)
+    except OSError:
+        return False
+    if not _regular(info) or info.st_size != 0 or info.st_uid != os.getuid():
+        return False
+    try:
+        _remove_own(fd, _PROBE_NAME, info.st_ino)
+    except OSError:
+        return False
+    return True
